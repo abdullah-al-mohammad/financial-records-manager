@@ -19,6 +19,39 @@ export default function Dashboard({ records, payments, setActiveTab }) {
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
 
+  const paymentTotals = useMemo(() => {
+    let totalPaid = 0;
+    let online = 0;
+    let onlineRecords = [];
+
+    const onlineMethods = [
+      'bkash',
+      'nagad',
+      'rocket',
+      'upay',
+      'sslcommerz',
+      'card',
+      'mobile banking',
+      'online',
+    ];
+
+    records.forEach(r => {
+      const amount = Number(r.paidByCustomer) || 0;
+      totalPaid += amount;
+      const method = String(r.digitalPaymentMethod || r.paymentMethod || '')
+        .trim()
+        .toLowerCase();
+      
+      const isOnline = onlineMethods.includes(method);
+      if (isOnline) {
+        online += amount;
+        onlineRecords.push(r);
+      }
+    });
+    const cash = totalPaid - online;
+    return { online, cash, onlineRecords };
+  }, [records]);
+
   // Aggregate stats across all records
   const stats = useMemo(() => {
     let sales = 0;
@@ -314,6 +347,44 @@ export default function Dashboard({ records, payments, setActiveTab }) {
             className="text-[11px] font-bold text-indigo-400 hover:text-indigo-300 py-1.5 px-3 rounded-lg bg-indigo-500/5 hover:bg-indigo-500/10 transition-all cursor-pointer"
           >
             View Cash sources
+          </button>
+        </div>
+      </div>
+
+      {/* Extra Cards Row (Online vs Cash Payments) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="glass-panel border border-indigo-500/15 rounded-2xl p-5 flex items-center justify-between shadow-lg shadow-indigo-500/5">
+          <div className="flex items-center gap-4">
+            <div className="p-3.5 rounded-2xl bg-indigo-500/10 text-indigo-400">
+              <CreditCard className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Online Payments Received ({paymentTotals.onlineRecords.length})</span>
+              <span className="text-xl font-bold text-white tracking-tight block mt-1">৳{paymentTotals.online.toLocaleString()}</span>
+            </div>
+          </div>
+          <button 
+            onClick={() => setActiveTab('sales')}
+            className="text-[11px] font-bold text-indigo-400 hover:text-indigo-300 py-1.5 px-3 rounded-lg bg-indigo-500/5 hover:bg-indigo-500/10 transition-all cursor-pointer"
+          >
+            View Details
+          </button>
+        </div>
+        <div className="glass-panel border border-rose-500/15 rounded-2xl p-5 flex items-center justify-between shadow-lg shadow-rose-500/5">
+          <div className="flex items-center gap-4">
+            <div className="p-3.5 rounded-2xl bg-rose-500/10 text-rose-400">
+              <PiggyBank className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Cash in Hand</span>
+              <span className="text-xl font-bold text-white tracking-tight block mt-1">৳{paymentTotals.cash.toLocaleString()}</span>
+            </div>
+          </div>
+          <button 
+            onClick={() => setActiveTab('sales')}
+            className="text-[11px] font-bold text-rose-400 hover:text-rose-300 py-1.5 px-3 rounded-lg bg-rose-500/5 hover:bg-rose-500/10 transition-all cursor-pointer"
+          >
+            View Details
           </button>
         </div>
       </div>

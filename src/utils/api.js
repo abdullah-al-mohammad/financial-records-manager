@@ -4,7 +4,12 @@ const LIVE_MODE_KEY = 'financial_manager_live_mode';
 
 // Default mock data seed lists
 const DEFAULT_RECHANTS = [
-  'Al Amin Store', 'Dhaka Mart', 'Rahim Traders', 'Karim Brothers', 'City Shop', 'Bismillah Enterprise'
+  'Al Amin Store',
+  'Dhaka Mart',
+  'Rahim Traders',
+  'Karim Brothers',
+  'City Shop',
+  'Bismillah Enterprise',
 ];
 
 const DEFAULT_RECORDS = [
@@ -22,12 +27,16 @@ const DEFAULT_RECORDS = [
     discountAmount: '1000',
     deliveryCharge: '150',
     paidByCustomer: '49150',
+    otherCashSource: '',
+    otherCashAmount: '0',
     riderName: 'Fahim',
     riderSalary: '1200',
     otherExpenseName: 'Packaging',
     otherExpense: '300',
     fixedExpenseName: 'Software Subscription',
-    fixedExpense: '1500'
+    fixedExpense: '1500',
+    expenseDescription: '',
+    digitalPaymentMethod: 'bkash',
   },
   {
     id: '2',
@@ -43,18 +52,34 @@ const DEFAULT_RECORDS = [
     discountAmount: '4000',
     deliveryCharge: '250',
     paidByCustomer: '76250',
+    otherCashSource: '',
+    otherCashAmount: '0',
     riderName: 'Kabir',
     riderSalary: '1500',
     otherExpenseName: 'Icepacks',
     otherExpense: '200',
     fixedExpenseName: 'Rent Contribution',
-    fixedExpense: '2000'
-  }
+    fixedExpense: '2000',
+    expenseDescription: '',
+    digitalPaymentMethod: 'cash',
+  },
 ];
 
 const DEFAULT_PAYMENTS = [
-  { id: 'p1', date: '2026-05-08', merchantName: 'Al Amin Store', paidAmount: '20000', notes: 'Advance payment' },
-  { id: 'p2', date: '2026-05-15', merchantName: 'Dhaka Mart', paidAmount: '40000', notes: 'Mid-month installment' }
+  {
+    id: 'p1',
+    date: '2026-05-08',
+    merchantName: 'Al Amin Store',
+    paidAmount: '20000',
+    notes: 'Advance payment',
+  },
+  {
+    id: 'p2',
+    date: '2026-05-15',
+    merchantName: 'Dhaka Mart',
+    paidAmount: '40000',
+    notes: 'Mid-month installment',
+  },
 ];
 
 // SHA-256 implementation using Web Crypto API
@@ -97,18 +122,24 @@ const mockDb = {
       this.set('records', DEFAULT_RECORDS);
       this.set('payments', DEFAULT_PAYMENTS);
       this.set('merchants', DEFAULT_RECHANTS);
-      
+
       const adminHash = await hashPassword('admin123');
       const userHash = await hashPassword('user123');
       this.set('users', [
         { username: 'admin', passwordHash: adminHash, role: 'Admin', status: 'Active' },
-        { username: 'user', passwordHash: userHash, role: 'User', status: 'Active' }
+        { username: 'user', passwordHash: userHash, role: 'User', status: 'Active' },
       ]);
-      
+
       this.set('audit', [
-        { id: 'a1', timestamp: new Date().toISOString(), username: 'SYSTEM', action: 'DB Init', details: 'Demo database seeded successfully.' }
+        {
+          id: 'a1',
+          timestamp: new Date().toISOString(),
+          username: 'SYSTEM',
+          action: 'DB Init',
+          details: 'Demo database seeded successfully.',
+        },
       ]);
-      
+
       localStorage.setItem('fm_mock_initialized', 'true');
     }
   },
@@ -119,10 +150,10 @@ const mockDb = {
       timestamp: new Date().toISOString(),
       username,
       action,
-      details
+      details,
     });
     this.set('audit', logs);
-  }
+  },
 };
 
 // Initialize Mock DB
@@ -180,11 +211,11 @@ function makeJsonpRequest(action, payload = {}) {
   return new Promise((resolve, reject) => {
     const callbackName = `FM_JSONP_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
     const url = new URL(scriptUrl);
-    
+
     // Attach default parameters
     url.searchParams.set('action', action);
     url.searchParams.set('callback', callbackName);
-    
+
     const session = getCurrentSession();
     if (session?.sessionToken) {
       url.searchParams.set('sessionToken', session.sessionToken);
@@ -198,7 +229,11 @@ function makeJsonpRequest(action, payload = {}) {
 
     const timeout = window.setTimeout(() => {
       cleanup();
-      reject(new Error('Network request timed out. Please check your internet connection or Google Apps Script health.'));
+      reject(
+        new Error(
+          'Network request timed out. Please check your internet connection or Google Apps Script health.'
+        )
+      );
     }, 15000);
 
     function cleanup() {
@@ -208,7 +243,7 @@ function makeJsonpRequest(action, payload = {}) {
       if (scriptEl) scriptEl.remove();
     }
 
-    window[callbackName] = (response) => {
+    window[callbackName] = response => {
       cleanup();
       if (response && response.success) {
         resolve(response);
@@ -242,7 +277,7 @@ export const api = {
       await new Promise(r => setTimeout(r, 600));
       const users = mockDb.get('users');
       const targetUser = users.find(u => u.username.toLowerCase() === username.toLowerCase());
-      
+
       if (!targetUser) {
         mockDb.logAudit('SYSTEM', 'Login Failed', `Username: ${username} (User not found)`);
         throw new Error('Invalid credentials');
@@ -251,19 +286,19 @@ export const api = {
         mockDb.logAudit(username, 'Login Blocked', 'Account is suspended');
         throw new Error('Account suspended');
       }
-      
+
       const passHash = await hashPassword(password);
       if (targetUser.passwordHash !== passHash) {
         mockDb.logAudit(username, 'Login Failed', 'Incorrect password');
         throw new Error('Invalid credentials');
       }
-      
+
       mockDb.logAudit(username, 'Login Success', 'User authenticated in Demo Mode');
       return {
         success: true,
         username: targetUser.username,
         role: targetUser.role,
-        sessionToken: `demo_token_${Date.now()}`
+        sessionToken: `demo_token_${Date.now()}`,
       };
     }
   },
@@ -289,11 +324,10 @@ export const api = {
   async createRecord(record) {
     if (isLiveMode()) {
       // Generate a UUID (fallback) to guarantee uniqueness
-      const generateId = () => (
-        (typeof crypto !== 'undefined' && crypto.randomUUID)
+      const generateId = () =>
+        typeof crypto !== 'undefined' && crypto.randomUUID
           ? crypto.randomUUID()
-          : `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-      );
+          : `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       let id = generateId();
       // Guard against rare collisions by checking existing IDs
       for (let attempts = 0; attempts < 5; attempts++) {
@@ -308,18 +342,20 @@ export const api = {
       const records = mockDb.get('records');
       const newRecord = {
         ...record,
-        id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID()
-            : `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        id:
+          typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       };
       const updated = [...records, newRecord];
       // Remove any duplicate IDs (keep the latest entry)
       const deduped = Array.from(new Map(updated.map(r => [r.id, r])).values());
       mockDb.set('records', deduped);
-      
+
       const session = getCurrentSession();
       mockDb.logAudit(
-        session?.username || 'admin', 
-        'Create Sales Record', 
+        session?.username || 'admin',
+        'Create Sales Record',
         `ID: ${newRecord.id}, Merchant: ${newRecord.merchantName}, Amount: ৳${newRecord.salesAmount}`
       );
       return { success: true, id: newRecord.id };
@@ -335,11 +371,11 @@ export const api = {
       if (!records.some(r => r.id === record.id)) throw new Error('Record not found');
       const updated = records.map(r => (r.id === record.id ? record : r));
       mockDb.set('records', updated);
-      
+
       const session = getCurrentSession();
       mockDb.logAudit(
-        session?.username || 'admin', 
-        'Update Sales Record', 
+        session?.username || 'admin',
+        'Update Sales Record',
         `ID: ${record.id}, Merchant: ${record.merchantName}, Amount: ৳${record.salesAmount}`
       );
       return { success: true };
@@ -354,14 +390,14 @@ export const api = {
       const records = mockDb.get('records');
       const target = records.find(r => r.id === id);
       if (!target) throw new Error('Record not found');
-      
+
       const filtered = records.filter(r => r.id !== id);
       mockDb.set('records', filtered);
-      
+
       const session = getCurrentSession();
       mockDb.logAudit(
-        session?.username || 'admin', 
-        'Delete Sales Record', 
+        session?.username || 'admin',
+        'Delete Sales Record',
         `ID: ${id}, Merchant: ${target.merchantName}, Amount: ৳${target.salesAmount}`
       );
       return { success: true };
@@ -388,11 +424,11 @@ export const api = {
       const newPayment = { ...payment, id: 'p' + Date.now() };
       payments.push(newPayment);
       mockDb.set('payments', payments);
-      
+
       const session = getCurrentSession();
       mockDb.logAudit(
-        session?.username || 'admin', 
-        'Record Payment', 
+        session?.username || 'admin',
+        'Record Payment',
         `ID: ${newPayment.id}, Merchant: ${newPayment.merchantName}, Paid: ৳${newPayment.paidAmount}`
       );
       return { success: true, id: newPayment.id };
@@ -409,11 +445,11 @@ export const api = {
       if (index === -1) throw new Error('Payment not found');
       payments[index] = payment;
       mockDb.set('payments', payments);
-      
+
       const session = getCurrentSession();
       mockDb.logAudit(
-        session?.username || 'admin', 
-        'Update Payment', 
+        session?.username || 'admin',
+        'Update Payment',
         `ID: ${payment.id}, Merchant: ${payment.merchantName}, Paid: ৳${payment.paidAmount}`
       );
       return { success: true };
@@ -428,14 +464,14 @@ export const api = {
       const payments = mockDb.get('payments');
       const target = payments.find(p => p.id === id);
       if (!target) throw new Error('Payment not found');
-      
+
       const filtered = payments.filter(p => p.id !== id);
       mockDb.set('payments', filtered);
-      
+
       const session = getCurrentSession();
       mockDb.logAudit(
-        session?.username || 'admin', 
-        'Delete Payment', 
+        session?.username || 'admin',
+        'Delete Payment',
         `ID: ${id}, Merchant: ${target.merchantName}, Paid: ৳${target.paidAmount}`
       );
       return { success: true };
@@ -451,7 +487,7 @@ export const api = {
       const records = mockDb.get('records');
       const payments = mockDb.get('payments');
       const seeded = mockDb.get('merchants');
-      
+
       const set = new Set([...seeded]);
       records.forEach(r => r.merchantName && set.add(r.merchantName));
       payments.forEach(p => p.merchantName && set.add(p.merchantName));
@@ -479,20 +515,24 @@ export const api = {
       if (users.some(u => u.username.toLowerCase() === user.username.toLowerCase())) {
         throw new Error('Username already exists');
       }
-      
+
       const hash = await hashPassword(user.password);
       const newUser = {
         username: user.username,
         passwordHash: hash,
         role: user.role || 'User',
-        status: user.status || 'Active'
+        status: user.status || 'Active',
       };
-      
+
       users.push(newUser);
       mockDb.set('users', users);
-      
+
       const session = getCurrentSession();
-      mockDb.logAudit(session?.username || 'admin', 'Create User', `Username: ${user.username}, Role: ${user.role}`);
+      mockDb.logAudit(
+        session?.username || 'admin',
+        'Create User',
+        `Username: ${user.username}, Role: ${user.role}`
+      );
       return { success: true };
     }
   },
@@ -505,18 +545,22 @@ export const api = {
       const users = mockDb.get('users');
       const index = users.findIndex(u => u.username.toLowerCase() === user.username.toLowerCase());
       if (index === -1) throw new Error('User not found');
-      
+
       // Update fields
       if (user.role) users[index].role = user.role;
       if (user.status) users[index].status = user.status;
       if (user.password) {
         users[index].passwordHash = await hashPassword(user.password);
       }
-      
+
       mockDb.set('users', users);
-      
+
       const session = getCurrentSession();
-      mockDb.logAudit(session?.username || 'admin', 'Update User', `Username: ${user.username}, Role: ${users[index].role}, Status: ${users[index].status}`);
+      mockDb.logAudit(
+        session?.username || 'admin',
+        'Update User',
+        `Username: ${user.username}, Role: ${users[index].role}, Status: ${users[index].status}`
+      );
       return { success: true };
     }
   },
@@ -529,7 +573,7 @@ export const api = {
       const users = mockDb.get('users');
       const filtered = users.filter(u => u.username.toLowerCase() !== targetUsername.toLowerCase());
       mockDb.set('users', filtered);
-      
+
       const session = getCurrentSession();
       mockDb.logAudit(session?.username || 'admin', 'Delete User', `Username: ${targetUsername}`);
       return { success: true };
@@ -544,5 +588,5 @@ export const api = {
       await new Promise(r => setTimeout(r, 200));
       return mockDb.get('audit');
     }
-  }
+  },
 };

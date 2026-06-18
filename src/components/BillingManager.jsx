@@ -51,7 +51,7 @@ export default function BillingManager({
 
   const isPriorMonth = (dateStr, targetMonth) => {
     if (!dateStr) return false;
-    const d = new Date(dateStr + 'T00:00:00');
+    const d = new Date(dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00');
     const dMonthIdx = d.getMonth();
     const targetIdx = MONTHS.indexOf(targetMonth);
     return dMonthIdx < targetIdx;
@@ -59,7 +59,7 @@ export default function BillingManager({
 
   const isCurrentMonth = (dateStr, targetMonth) => {
     if (!dateStr) return false;
-    const d = new Date(dateStr + 'T00:00:00');
+    const d = new Date(dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00');
     return MONTHS[d.getMonth()] === targetMonth;
   };
 
@@ -79,25 +79,55 @@ export default function BillingManager({
 
     // Aggregate Billed
     records.forEach(r => {
-      if (!r.merchantName || !ledger[r.merchantName]) return;
+      if (!r.merchantName) return;
+      if (!ledger[r.merchantName]) {
+        ledger[r.merchantName] = {
+          name: r.merchantName,
+          priorBilled: 0,
+          priorPaid: 0,
+          currentBilled: 0,
+          currentPaid: 0,
+        };
+      }
       const bill = parseFloat(r.merchantBill) || 0;
       
-      if (isPriorMonth(r.date, selectedMonth)) {
-        ledger[r.merchantName].priorBilled += bill;
-      } else if (isCurrentMonth(r.date, selectedMonth)) {
-        ledger[r.merchantName].currentBilled += bill;
+      const recordMonth = r.month || getMonthName(r.date);
+      const targetIdx = MONTHS.indexOf(selectedMonth);
+      const recordIdx = MONTHS.indexOf(recordMonth);
+
+      if (recordIdx !== -1) {
+        if (recordIdx < targetIdx) {
+          ledger[r.merchantName].priorBilled += bill;
+        } else if (recordIdx === targetIdx) {
+          ledger[r.merchantName].currentBilled += bill;
+        }
       }
     });
 
     // Aggregate Paid
     payments.forEach(p => {
-      if (!p.merchantName || !ledger[p.merchantName]) return;
+      if (!p.merchantName) return;
+      if (!ledger[p.merchantName]) {
+        ledger[p.merchantName] = {
+          name: p.merchantName,
+          priorBilled: 0,
+          priorPaid: 0,
+          currentBilled: 0,
+          currentPaid: 0,
+        };
+      }
       const paid = parseFloat(p.paidAmount) || 0;
 
-      if (isPriorMonth(p.date, selectedMonth)) {
-        ledger[p.merchantName].priorPaid += paid;
-      } else if (isCurrentMonth(p.date, selectedMonth)) {
-        ledger[p.merchantName].currentPaid += paid;
+      const paymentMonth = getMonthName(p.date);
+      const targetIdx = MONTHS.indexOf(selectedMonth);
+      const paymentIdx = MONTHS.indexOf(paymentMonth);
+
+      if (paymentIdx !== -1) {
+        if (paymentIdx < targetIdx) {
+          ledger[p.merchantName].priorPaid += paid;
+        } else if (paymentIdx === targetIdx) {
+          ledger[p.merchantName].currentPaid += paid;
+        }
       }
     });
 

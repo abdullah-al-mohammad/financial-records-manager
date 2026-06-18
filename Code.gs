@@ -28,6 +28,8 @@ const RECORD_HEADERS = [
   'otherExpense',
   'fixedExpenseName',
   'fixedExpense',
+  'expenseDescription',
+  'digitalPaymentMethod',
 ];
 
 const PAYMENT_HEADERS = ['id', 'date', 'merchantName', 'paidAmount', 'notes'];
@@ -37,23 +39,39 @@ const AUDIT_HEADERS = ['id', 'timestamp', 'username', 'action', 'details'];
 function getOrCreateSheet(name, headers) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(name);
+
   if (!sheet) {
     sheet = ss.insertSheet(name);
-    sheet.appendRow(headers);
-    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
-
-    // Seed default admin if initializing Users sheet
-    if (name === USERS_SHEET) {
-      const defaultAdmin = {
-        username: 'admin',
-        passwordHash: hashPassword('admin123'),
-        role: 'Admin',
-        status: 'Active',
-      };
-      sheet.appendRow(objectToRow(defaultAdmin, USER_HEADERS));
-    }
   }
+
+  ensureSheetHeaders(sheet, headers);
+
+  if (!sheet.getRange('A2').getValue() && name === USERS_SHEET) {
+    const defaultAdmin = {
+      username: 'admin',
+      passwordHash: hashPassword('admin123'),
+      role: 'Admin',
+      status: 'Active',
+    };
+    sheet.appendRow(objectToRow(defaultAdmin, USER_HEADERS));
+  }
+
   return sheet;
+}
+
+function ensureSheetHeaders(sheet, headers) {
+  const currentColumns = Math.max(1, sheet.getLastColumn());
+
+  if (currentColumns < headers.length) {
+    sheet.insertColumnsAfter(currentColumns, headers.length - currentColumns);
+  }
+
+  // Only write up to the number of defined headers (never exceed our schema)
+  const colCount = Math.max(headers.length, sheet.getLastColumn());
+  const headerRange = sheet.getRange(1, 1, 1, colCount);
+  const headerRow = headers.concat(Array(Math.max(0, colCount - headers.length)).fill(''));
+  headerRange.setValues([headerRow]);
+  headerRange.setFontWeight('bold');
 }
 
 function getSheet() {
@@ -255,6 +273,7 @@ function doGet(e) {
     if (action === 'create') {
       const sheet = getSheet();
       if (!record.id) record.id = new Date().getTime().toString();
+      console.log(JSON.stringify(record));
       sheet.appendRow(objectToRow(record, RECORD_HEADERS));
       logAudit(
         user,
@@ -537,7 +556,11 @@ function doPost(e) {
 
     // Sales Records Actions
     if (action === 'getAll') {
-      return jsonResponse({ success: true, records: getAllRecords() });
+      const sheet = getSheet();
+      const data = sheet.getDataRange().getValues();
+      const records =
+        data.length <= 1 ? [] : data.slice(1).map(row => rowToObject(row, RECORD_HEADERS));
+      return jsonResponse({ success: true, records });
     }
 
     if (action === 'create') {
@@ -584,7 +607,11 @@ function doPost(e) {
 
     // Payment Actions
     if (action === 'getPayments') {
-      return jsonResponse({ success: true, payments: getAllPayments() });
+      const sheet = getPaymentsSheet();
+      const data = sheet.getDataRange().getValues();
+      const payments =
+        data.length <= 1 ? [] : data.slice(1).map(row => rowToObject(row, PAYMENT_HEADERS));
+      return jsonResponse({ success: true, payments });
     }
 
     if (action === 'createPayment') {

@@ -154,6 +154,63 @@ export default function Dashboard({ records, payments, setActiveTab }) {
       .slice(0, 5);
   }, [records]);
 
+  // Outstanding dues prior to the current month (previous month outstanding dues)
+  const previousMonthDues = useMemo(() => {
+    const currentMonthIdx = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+    const MONTHS = [
+      'January', 'February', 'March', 'April', 'May', 'June', 
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    
+    const merchantPriorDues = {};
+
+    records.forEach(r => {
+      if (!r.merchantName) return;
+      
+      let isPrior = false;
+      if (r.date) {
+        const d = new Date(r.date.includes('T') ? r.date : r.date + 'T00:00:00');
+        isPrior = d.getFullYear() < currentYear || (d.getFullYear() === currentYear && d.getMonth() < currentMonthIdx);
+      } else if (r.month) {
+        const idx = MONTHS.indexOf(r.month);
+        isPrior = idx !== -1 && idx < currentMonthIdx;
+      }
+      
+      if (isPrior) {
+        if (!merchantPriorDues[r.merchantName]) {
+          merchantPriorDues[r.merchantName] = { billed: 0, paid: 0 };
+        }
+        merchantPriorDues[r.merchantName].billed += parseFloat(r.merchantBill) || 0;
+      }
+    });
+
+    payments.forEach(p => {
+      if (!p.merchantName) return;
+      
+      let isPrior = false;
+      if (p.date) {
+        const d = new Date(p.date.includes('T') ? p.date : p.date + 'T00:00:00');
+        isPrior = d.getFullYear() < currentYear || (d.getFullYear() === currentYear && d.getMonth() < currentMonthIdx);
+      }
+      
+      if (isPrior) {
+        if (!merchantPriorDues[p.merchantName]) {
+          merchantPriorDues[p.merchantName] = { billed: 0, paid: 0 };
+        }
+        merchantPriorDues[p.merchantName].paid += parseFloat(p.paidAmount) || 0;
+      }
+    });
+
+    return Object.entries(merchantPriorDues)
+      .map(([name, data]) => ({
+        name,
+        due: data.billed - data.paid
+      }))
+      .filter(m => m.due > 0)
+      .sort((a, b) => b.due - a.due);
+  }, [records, payments]);
+
   // Expense breakdown calculations for Donut chart SVG
   const expensePieData = useMemo(() => {
     const total = stats.riderSalaries + stats.fixedExpenses + stats.otherExpenses;
@@ -523,7 +580,7 @@ export default function Dashboard({ records, payments, setActiveTab }) {
       </div>
 
       {/* Leaderboards and summaries */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Top Merchants Leaderboard */}
         <div className="glass-panel border border-slate-900 rounded-2xl p-5">
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">Top Merchants by Volume</h3>
@@ -555,6 +612,38 @@ export default function Dashboard({ records, payments, setActiveTab }) {
               })}
             </div>
           )}
+        </div>
+
+        {/* Previous Month Outstanding Dues */}
+        <div className="glass-panel border border-slate-900 rounded-2xl p-5 flex flex-col justify-between">
+          <div>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4 flex items-center justify-between">
+              <span>Prior Month Dues</span>
+              <span className="text-[10px] text-rose-400 font-bold bg-rose-500/10 px-2 py-0.5 rounded-lg border border-rose-500/20 uppercase tracking-widest">
+                Due
+              </span>
+            </h3>
+            {previousMonthDues.length === 0 ? (
+              <div className="py-8 text-center text-xs text-slate-500">
+                All previous dues settled.
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
+                {previousMonthDues.map((m) => (
+                  <div key={m.name} className="flex justify-between items-center text-xs py-1.5 border-b border-slate-900/60 last:border-b-0">
+                    <span className="font-semibold text-slate-200">{m.name}</span>
+                    <span className="font-bold text-rose-400">৳{m.due.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="pt-3 border-t border-slate-900 mt-4 flex items-center justify-between">
+            <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider block">Total Outstanding Prior</span>
+            <span className="text-sm font-extrabold text-rose-400 block">
+              ৳{previousMonthDues.reduce((sum, m) => sum + m.due, 0).toLocaleString()}
+            </span>
+          </div>
         </div>
 
         {/* Latest Audit / System Logs preview */}

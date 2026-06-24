@@ -23,11 +23,50 @@ export default function App() {
   // States
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem('financial_manager_theme') || 'auto';
+  });
 
   const showToast = useCallback((msg, type = 'success') => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 4000);
   }, []);
+
+  // Theme Loader and Sync Effect
+  useEffect(() => {
+    localStorage.setItem('financial_manager_theme', theme);
+    const root = document.documentElement;
+    
+    const applyTheme = (t) => {
+      if (t === 'dark') {
+        root.setAttribute('data-theme', 'dark');
+        root.classList.remove('light');
+        root.classList.add('dark');
+        root.style.colorScheme = 'dark';
+      } else if (t === 'light') {
+        root.setAttribute('data-theme', 'light');
+        root.classList.remove('dark');
+        root.classList.add('light');
+        root.style.colorScheme = 'light';
+      } else {
+        // Auto
+        const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        root.setAttribute('data-theme', systemTheme);
+        root.classList.remove(systemTheme === 'dark' ? 'light' : 'dark');
+        root.classList.add(systemTheme);
+        root.style.colorScheme = systemTheme;
+      }
+    };
+
+    applyTheme(theme);
+
+    if (theme === 'auto') {
+      const media = window.matchMedia('(prefers-color-scheme: dark)');
+      const listener = () => applyTheme('auto');
+      media.addEventListener('change', listener);
+      return () => media.removeEventListener('change', listener);
+    }
+  }, [theme]);
 
   // Check Session on Mount
   useEffect(() => {
@@ -264,7 +303,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col lg:flex-row bg-[#060913]">
+    <div className="min-h-screen flex flex-col lg:flex-row bg-[var(--bg-app-color)]">
       {/* Toast Alert Box */}
       {toast && (
         <div
@@ -294,6 +333,8 @@ export default function App() {
         setActiveTab={setActiveTab} 
         user={currentUser} 
         onLogout={handleLogout} 
+        theme={theme}
+        onChangeTheme={setTheme}
       />
 
       {/* Core Workspace Panel */}

@@ -13,35 +13,93 @@
 
 :root {
   --font-sans: 'Outfit', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --bg-app-color: #060913;
+  --bg-sidebar-color: #0a0f1d;
+  --radial-color-1: rgba(99, 102, 241, 0.12);
+  --radial-color-2: rgba(139, 92, 246, 0.08);
+  --glass-bg: rgba(17, 24, 39, 0.65);
+  --glass-glow-bg: rgba(22, 28, 45, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  --glass-glow-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.45), 0 0 16px rgba(99, 102, 241, 0.05);
+}
+
+:root[data-theme='light'] {
+  --bg-app-color: #f8fafc;
+  --bg-sidebar-color: #ffffff;
+  --radial-color-1: rgba(99, 102, 241, 0.06);
+  --radial-color-2: rgba(139, 92, 246, 0.04);
+  --glass-bg: rgba(255, 255, 255, 0.75);
+  --glass-glow-bg: rgba(255, 255, 255, 0.9);
+  --glass-border: rgba(99, 102, 241, 0.12);
+  --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
+  --glass-glow-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.08), 0 0 16px rgba(99, 102, 241, 0.03);
+
+  --color-slate-950: #ffffff;
+  --color-slate-900: #f1f5f9;
+  --color-slate-850: #e2e8f0;
+  --color-slate-800: #cbd5e1;
+  --color-slate-700: #94a3b8;
+  --color-slate-600: #475569;
+  --color-slate-500: #64748b;
+  --color-slate-400: #334155;
+  --color-slate-300: #1e293b;
+  --color-slate-200: #0f172a;
+  
+  --color-white: #0f172a;
+}
+
+/* Maintain true white text in light mode for gradients and colored backgrounds */
+:root[data-theme='light'] .bg-indigo-600,
+:root[data-theme='light'] .bg-indigo-500,
+:root[data-theme='light'] .bg-indigo-700,
+:root[data-theme='light'] .bg-rose-600,
+:root[data-theme='light'] .bg-rose-500,
+:root[data-theme='light'] .bg-emerald-600,
+:root[data-theme='light'] .bg-emerald-500,
+:root[data-theme='light'] .bg-violet-600,
+:root[data-theme='light'] .bg-slate-900,
+:root[data-theme='light'] .bg-slate-950,
+:root[data-theme='light'] .bg-gradient-to-tr,
+:root[data-theme='light'] .bg-gradient-to-r,
+:root[data-theme='light'] button.bg-indigo-600,
+:root[data-theme='light'] button.bg-indigo-500,
+:root[data-theme='light'] button.bg-gray-800,
+:root[data-theme='light'] .toast-alert {
+  --color-white: #ffffff !important;
+  color: #ffffff !important;
 }
 
 body {
   margin: 0;
   font-family: var(--font-sans);
-  background-color: #060913;
+  background-color: var(--bg-app-color);
   background-image: 
-    radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.12) 0px, transparent 50%),
-    radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.08) 0px, transparent 50%);
+    radial-gradient(at 0% 0%, var(--radial-color-1) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, var(--radial-color-2) 0px, transparent 50%);
   background-attachment: fixed;
-  color: #f3f4f6;
+  color: var(--color-slate-300, #f3f4f6);
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* Glassmorphism Styles */
 .glass-panel {
-  background: rgba(17, 24, 39, 0.65);
+  background: var(--glass-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  transition: border-color 0.3s ease, background 0.3s ease, box-shadow 0.3s ease;
 }
 
 .glass-panel-glow {
-  background: rgba(22, 28, 45, 0.75);
+  background: var(--glass-glow-bg);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(99, 102, 241, 0.15);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.45), 0 0 16px rgba(99, 102, 241, 0.05);
+  border: 1px solid var(--color-border-card);
+  box-shadow: var(--glass-glow-shadow);
+  transition: border-color 0.3s ease, background 0.3s ease, box-shadow 0.3s ease;
 }
 
 .glass-card-hover {
@@ -111,5 +169,24 @@ input[type=number] {
     border: 1px solid #ccc !important;
     color: black !important;
     box-shadow: none !important;
+  }
+
+  body.print-report-only {
+    background: white !important;
+    color: black !important;
+  }
+
+  body.print-report-only #root > div:first-child {
+    display: none !important;
+  }
+
+  body.print-report-only .printable-report-area {
+    display: block !important;
+    background: white !important;
+    color: black !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
   }
 }

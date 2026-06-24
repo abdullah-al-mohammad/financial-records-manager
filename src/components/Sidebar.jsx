@@ -11,10 +11,13 @@ import {
   X, 
   ShieldAlert, 
   Database,
-  ShieldCheck
+  ShieldCheck,
+  Sun,
+  Moon,
+  Monitor
 } from 'lucide-react';
 
-export default function Sidebar({ activeTab, setActiveTab, user, onLogout }) {
+export default function Sidebar({ activeTab, setActiveTab, user, onLogout, theme, onChangeTheme }) {
   const [isOpen, setIsOpen] = useState(false);
 
   const menuItems = [
@@ -38,7 +41,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout }) {
   return (
     <>
       {/* Mobile Top Bar */}
-      <div className="lg:hidden flex items-center justify-between px-4 py-3 bg-[#0a0f1d] border-b border-slate-900 sticky top-0 z-40">
+      <div className="lg:hidden flex items-center justify-between px-4 py-3 bg-[var(--bg-sidebar-color)] border-b border-slate-905 sticky top-0 z-40">
         <div className="flex items-center gap-2">
           <div className="p-1.5 rounded-lg bg-gradient-to-tr from-indigo-500 to-violet-600 shadow shadow-indigo-500/20">
             <ShieldCheck className="w-5 h-5 text-white" />
@@ -63,7 +66,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout }) {
 
       {/* Main Sidebar Container */}
       <aside className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-[#0a0f1d] border-r border-slate-900/80 flex flex-col justify-between
+        fixed inset-y-0 left-0 z-50 w-64 bg-[var(--bg-sidebar-color)] border-r border-slate-900/80 flex flex-col justify-between
         transform lg:transform-none transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
@@ -122,6 +125,54 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout }) {
               )}
             </div>
             <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping" />
+          </div>
+
+          {/* Theme Selector Option */}
+          <div className="p-3 bg-slate-900/20 rounded-xl border border-slate-900/30 space-y-2">
+            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Interface Style</span>
+            <div className="grid grid-cols-3 gap-1 bg-slate-950 p-1 rounded-xl border border-slate-900">
+              <button
+                type="button"
+                onClick={() => onChangeTheme('light')}
+                title="Light Mode"
+                className={`flex flex-col items-center justify-center py-1.5 rounded-lg transition-all cursor-pointer ${
+                  theme === 'light' 
+                    ? 'bg-indigo-600 text-white shadow shadow-indigo-600/10' 
+                    : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900/40'
+                }`}
+              >
+                <Sun className="w-3.5 h-3.5" />
+                <span className="text-[8px] font-bold mt-0.5">Light</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onChangeTheme('dark')}
+                title="Dark Mode"
+                className={`flex flex-col items-center justify-center py-1.5 rounded-lg transition-all cursor-pointer ${
+                  theme === 'dark' 
+                    ? 'bg-indigo-600 text-white shadow shadow-indigo-600/10' 
+                    : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900/40'
+                }`}
+              >
+                <Moon className="w-3.5 h-3.5" />
+                <span className="text-[8px] font-bold mt-0.5">Dark</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onChangeTheme('auto')}
+                title="Auto Detect"
+                className={`flex flex-col items-center justify-center py-1.5 rounded-lg transition-all cursor-pointer ${
+                  theme === 'auto' 
+                    ? 'bg-indigo-600 text-white shadow shadow-indigo-600/10' 
+                    : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900/40'
+                }`}
+              >
+                <Monitor className="w-3.5 h-3.5" />
+                <span className="text-[8px] font-bold mt-0.5">Auto</span>
+              </button>
+            </div>
           </div>
 
           {/* User Details */}

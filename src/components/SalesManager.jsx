@@ -1,6 +1,6 @@
 import { Calendar, Edit2, Plus, Search, SlidersHorizontal, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import OverheadExpenses from './OverheadExpenses';
+import { computeNetCashBalance } from '../utils/finance';
 
 const MONTHS = [
   'January',
@@ -74,12 +74,14 @@ const defaultForm = {
   fixedExpenseName: '',
   fixedExpense: '',
   expenseDescription: '',
+  paymentSource: 'cash',
   // New field: digital payment method (bKash, Nagad, Rocket, Other)
   digitalPaymentMethod: '',
 };
 
 export default function SalesManager({
   records,
+  payments,
   merchants,
   onAddRecord,
   onUpdateRecord,
@@ -165,6 +167,7 @@ export default function SalesManager({
       otherExpense: rec.otherExpense || '',
       fixedExpense: rec.fixedExpense || '',
       expenseDescription: rec.expenseDescription || '',
+      paymentSource: rec.paymentSource || 'cash',
     });
     setEditingId(rec.id);
     setIsOpen(true);
@@ -193,6 +196,7 @@ export default function SalesManager({
       riderSalary: form.riderSalary ? String(form.riderSalary) : '0',
       otherExpense: form.otherExpense ? String(form.otherExpense) : '0',
       fixedExpense: form.fixedExpense ? String(form.fixedExpense) : '0',
+      paymentSource: form.paymentSource || 'cash',
     };
 
     try {
@@ -219,13 +223,13 @@ export default function SalesManager({
     }
   };
 
-  const visibleRecords = useMemo(() => records, [records]);
-  console.log('visibleRecords:', visibleRecords);
+  const visibleRecords = useMemo(
+    () => records.filter(r => (parseFloat(r.salesAmount) || 0) > 0),
+    [records]
+  );
 
   // Filter & Search computation
   const filteredRecords = useMemo(() => {
-    // Use localRecords (which may include imported rows) for filtering
-
     return visibleRecords.filter(r => {
       const matchSearch =
         r.merchantName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -237,26 +241,9 @@ export default function SalesManager({
     });
   }, [visibleRecords, searchTerm, filterMonth, filterType]);
 
-  // Compute payment totals for the dashboard
-  // const totalOnline = useMemo(() => {
-  //   return visibleRecords.reduce((sum, r) => {
-  //     const amount = Number(r.paidByCustomer || r.salesAmount || 0);
-  //     const bucket = getPaymentBucket(r.digitalPaymentMethod);
-
-  //     return bucket === 'online' ? sum + amount : sum;
-  //   }, 0);
-  // }, [visibleRecords]);
   const totalOnline = useMemo(() => {
     return visibleRecords.reduce((sum, r) => {
-      console.log(
-        'Payment:',
-        r.digitalPaymentMethod,
-        'Bucket:',
-        getPaymentBucket(r.digitalPaymentMethod)
-      );
-
       const amount = Number(r.paidByCustomer || r.salesAmount || 0);
-
       return getPaymentBucket(r.digitalPaymentMethod) === 'online' ? sum + amount : sum;
     }, 0);
   }, [visibleRecords]);
@@ -264,11 +251,14 @@ export default function SalesManager({
   const totalCash = useMemo(() => {
     return visibleRecords.reduce((sum, r) => {
       const amount = Number(r.paidByCustomer || r.salesAmount || 0);
-      const bucket = getPaymentBucket(r.digitalPaymentMethod);
-
-      return bucket === 'cash' ? sum + amount : sum;
+      return getPaymentBucket(r.digitalPaymentMethod) === 'cash' ? sum + amount : sum;
     }, 0);
   }, [visibleRecords]);
+
+  const cashBalance = useMemo(
+    () => computeNetCashBalance(records, payments || []),
+    [records, payments]
+  );
 
   return (
     <div className="space-y-6">
@@ -305,23 +295,39 @@ export default function SalesManager({
       </div>
 
       {/* Dashboard Summary Boxes */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-4">
-        {/* Online Payment Total */}
-        <div className="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+        <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
           <h3 className="text-xs font-medium text-indigo-400 uppercase tracking-wider mb-1">
-            Online Payment Total
+            Online Balance
           </h3>
           <p className="text-2xl font-bold text-emerald-400">
-            ৳{Number(totalOnline).toLocaleString()}
+            ৳{Number(cashBalance.onlineBalance).toLocaleString()}
           </p>
         </div>
-        {/* Cash Payment Total */}
-        <div className="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-4">
+        <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
           <h3 className="text-xs font-medium text-indigo-400 uppercase tracking-wider mb-1">
-            Cash in Hand
+            Cash in Hand Balance
           </h3>
           <p className="text-2xl font-bold text-emerald-400">
-            ৳{Number(totalCash).toLocaleString()}
+            ৳{Number(cashBalance.cashBalance).toLocaleString()}
+          </p>
+        </div>
+        <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
+          <h3 className="text-xs font-medium text-rose-400 uppercase tracking-wider mb-1">
+            Deductions (Expenses + Payouts)
+          </h3>
+          <p className="text-2xl font-bold text-rose-400">
+            ৳{(cashBalance.expenses.total + cashBalance.merchantPayouts).toLocaleString()}
+          </p>
+        </div>
+        <div className="bg-slate-950 border border-amber-500/20 rounded-xl p-4">
+          <h3 className="text-xs font-medium text-amber-400 uppercase tracking-wider mb-1">
+            Net Cash Remaining
+          </h3>
+          <p
+            className={`text-2xl font-bold ${cashBalance.netRemaining >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}
+          >
+            ৳{cashBalance.netRemaining.toLocaleString()}
           </p>
         </div>
       </div>
@@ -393,17 +399,13 @@ export default function SalesManager({
                 <th className="p-4 whitespace-nowrap">Delivery</th>
                 <th className="p-4 whitespace-nowrap">Payment Method</th>
                 <th className="p-4 whitespace-nowrap">Paid by Cust</th>
-                <th className="p-4 whitespace-nowrap">Rider Wage</th>
-                <th className="p-4 whitespace-nowrap">Other Exp</th>
-                <th className="p-4 whitespace-nowrap">Expense Desc</th>
-                <th className="p-4 whitespace-nowrap">Fixed Exp</th>
                 <th className="p-4 whitespace-nowrap text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-900/40">
               {filteredRecords.length === 0 ? (
                 <tr>
-                  <td colSpan="13" className="p-8 text-center text-slate-500 font-medium">
+                  <td colSpan="9" className="p-8 text-center text-slate-500 font-medium">
                     No transactions found matching the parameters.
                   </td>
                 </tr>
@@ -457,51 +459,6 @@ export default function SalesManager({
                     </td>
                     <td className="p-4 whitespace-nowrap font-bold text-slate-200">
                       ৳{Number(r.paidByCustomer || 0).toLocaleString()}
-                    </td>
-                    <td className="p-4 whitespace-nowrap text-rose-400/90">
-                      {r.riderSalary ? (
-                        <div>
-                          <span>৳{Number(r.riderSalary).toLocaleString()}</span>
-                          {r.riderName && (
-                            <span className="text-[10px] text-slate-500 block truncate max-w-[80px]">
-                              {r.riderName}
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td className="p-4 whitespace-nowrap text-rose-400/90">
-                      {r.otherExpense ? (
-                        <div>
-                          <span>৳{Number(r.otherExpense).toLocaleString()}</span>
-                          {r.otherExpenseName && (
-                            <span className="text-[10px] text-slate-500 block truncate max-w-[80px]">
-                              {r.otherExpenseName}
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td className="p-4 whitespace-nowrap text-slate-400">
-                      {r.expenseDescription || '—'}
-                    </td>
-                    <td className="p-4 whitespace-nowrap text-rose-400/90 font-medium">
-                      {r.fixedExpense ? (
-                        <div>
-                          <span>৳{Number(r.fixedExpense).toLocaleString()}</span>
-                          {r.fixedExpenseName && (
-                            <span className="text-[10px] text-slate-500 block truncate max-w-[80px]">
-                              {r.fixedExpenseName}
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        '—'
-                      )}
                     </td>
                     <td className="p-4 whitespace-nowrap text-center">
                       <div className="flex items-center justify-center gap-1.5">
@@ -762,6 +719,19 @@ export default function SalesManager({
                 </div>
 
                 <div className="space-y-1">
+                  <label className="text-[11px] font-medium text-slate-400">Payment Source</label>
+                  <select
+                    name="paymentSource"
+                    value={form.paymentSource || 'cash'}
+                    onChange={handleChange}
+                    className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                  >
+                    <option value="online">Online</option>
+                    <option value="cash">Cash</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
                   <label className="text-[11px] font-medium text-slate-400">Payment Method</label>
                   <select
                     name="digitalPaymentMethod"
@@ -817,9 +787,6 @@ export default function SalesManager({
                   <span className="text-sm font-bold text-emerald-400">৳{form.paidByCustomer}</span>
                 </div>
               </div>
-
-              {/* OVERHEAD EXPENSES SECTION */}
-              <OverheadExpenses form={form} handleChange={handleChange} />
             </form>
 
             {/* Drawer Footer Actions */}

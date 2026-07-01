@@ -1,12 +1,19 @@
-import React from 'react';
-
-// OverheadExpenses component - handles overhead expense fields
-// Props:
-//   form: the current form state object from SalesManager
-//   handleChange: function to handle input changes (e.g., setForm)
+// OverheadExpenses component - expense form fields used in the dedicated Expense section
 const OverheadExpenses = ({ form, handleChange }) => {
   return (
     <div className="space-y-4">
+      <div className="space-y-1">
+        <label className="text-[11px] font-medium text-slate-400">Payment Source</label>
+        <select
+          name="paymentSource"
+          value={form.paymentSource || 'cash'}
+          onChange={handleChange}
+          className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none"
+        >
+          <option value="online">Online</option>
+          <option value="cash">Cash</option>
+        </select>
+      </div>
       {/* Header is rendered in SalesManager */}
       {/* Rider Details */}
       <div className="grid grid-cols-2 gap-4">

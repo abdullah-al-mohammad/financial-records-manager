@@ -1,9 +1,20 @@
-import { useState, useMemo } from 'react';
-import { Calendar, History, TrendingUp, TrendingDown, Layers, FileSpreadsheet } from 'lucide-react';
+import { Calendar, FileSpreadsheet, History, Layers } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { getMonthFromDate } from '../utils/dates';
 
 const MONTHS_ORDER = [
-  'January', 'February', 'March', 'April', 'May', 'June', 
-  'July', 'August', 'September', 'October', 'November', 'December'
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ];
 
 export default function HistoryManager({ records, payments }) {
@@ -12,21 +23,23 @@ export default function HistoryManager({ records, payments }) {
   // Extract all unique months present in data
   const availableMonths = useMemo(() => {
     const months = new Set();
-    records.forEach(r => r.month && months.add(r.month));
-    payments.forEach(p => {
-      // Find month from payment date
-      if (p.date) {
-        const d = new Date(p.date + 'T00:00:00');
-        const monthName = MONTHS_ORDER[d.getMonth()];
+    records.forEach(r => {
+      if (r.month) months.add(r.month);
+      else if (r.date) {
+        const monthName = getMonthFromDate(r.date);
         if (monthName) months.add(monthName);
       }
+    });
+
+    payments.forEach(p => {
+      const monthName = getMonthFromDate(p.date);
+      if (monthName) months.add(monthName);
     });
 
     return Array.from(months).sort((a, b) => MONTHS_ORDER.indexOf(a) - MONTHS_ORDER.indexOf(b));
   }, [records, payments]);
 
-  // Set default selected month on load if not set
-  useMemo(() => {
+  useEffect(() => {
     if (!selectedMonth && availableMonths.length > 0) {
       setSelectedMonth(availableMonths[availableMonths.length - 1]);
     }
@@ -39,12 +52,23 @@ export default function HistoryManager({ records, payments }) {
     records.forEach(r => {
       if (!r.month) return;
       if (!summaries[r.month]) {
-        summaries[r.month] = { month: r.month, sales: 0, billed: 0, commission: 0, delivery: 0, expenses: 0, profit: 0 };
+        summaries[r.month] = {
+          month: r.month,
+          sales: 0,
+          billed: 0,
+          commission: 0,
+          delivery: 0,
+          expenses: 0,
+          profit: 0,
+        };
       }
       summaries[r.month].sales += parseFloat(r.salesAmount) || 0;
       summaries[r.month].commission += parseFloat(r.commissionAmount) || 0;
       summaries[r.month].delivery += parseFloat(r.deliveryCharge) || 0;
-      summaries[r.month].expenses += (parseFloat(r.riderSalary) || 0) + (parseFloat(r.otherExpense) || 0) + (parseFloat(r.fixedExpense) || 0);
+      summaries[r.month].expenses +=
+        (parseFloat(r.riderSalary) || 0) +
+        (parseFloat(r.otherExpense) || 0) +
+        (parseFloat(r.fixedExpense) || 0);
     });
 
     // Compute derived metrics
@@ -54,20 +78,24 @@ export default function HistoryManager({ records, payments }) {
       s.profit = income - s.expenses;
     });
 
-    return Object.values(summaries).sort((a, b) => MONTHS_ORDER.indexOf(a.month) - MONTHS_ORDER.indexOf(b.month));
+    return Object.values(summaries).sort(
+      (a, b) => MONTHS_ORDER.indexOf(a.month) - MONTHS_ORDER.indexOf(b.month)
+    );
   }, [records]);
 
   // Data for selected month
   const targetMonthData = useMemo(() => {
     if (!selectedMonth) return null;
 
-    const filteredRecords = records.filter(r => r.month === selectedMonth);
-    
-    // Payments that fall inside target month
+    const filteredRecords = records.filter(r => {
+      if (r.month) return r.month === selectedMonth;
+      if (!r.date) return false;
+      return getMonthFromDate(r.date) === selectedMonth;
+    });
+
     const filteredPayments = payments.filter(p => {
       if (!p.date) return false;
-      const d = new Date(p.date + 'T00:00:00');
-      return MONTHS_ORDER[d.getMonth()] === selectedMonth;
+      return getMonthFromDate(p.date) === selectedMonth;
     });
 
     // Calculate metrics
@@ -99,7 +127,7 @@ export default function HistoryManager({ records, payments }) {
       delivery,
       expenses,
       income,
-      profit
+      profit,
     };
   }, [records, payments, selectedMonth]);
 
@@ -126,11 +154,13 @@ export default function HistoryManager({ records, payments }) {
             </span>
             <select
               value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
+              onChange={e => setSelectedMonth(e.target.value)}
               className="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1 text-xs text-white font-bold outline-none focus:border-indigo-500"
             >
               {availableMonths.map(m => (
-                <option key={m} value={m}>{m}</option>
+                <option key={m} value={m}>
+                  {m}
+                </option>
               ))}
             </select>
           </div>
@@ -139,7 +169,8 @@ export default function HistoryManager({ records, payments }) {
 
       {availableMonths.length === 0 ? (
         <div className="glass-panel border border-slate-900 rounded-2xl p-8 text-center text-slate-500">
-          No records or payments have been logged yet. Check back once you have entered transactions.
+          No records or payments have been logged yet. Check back once you have entered
+          transactions.
         </div>
       ) : (
         <>
@@ -147,23 +178,39 @@ export default function HistoryManager({ records, payments }) {
           {targetMonthData && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="glass-panel border border-slate-900 rounded-2xl p-5">
-                <span className="text-[10px] font-bold text-slate-500 uppercase block tracking-wider">Month Sales Volume</span>
-                <span className="text-xl font-extrabold text-white block mt-1">৳{targetMonthData.sales.toLocaleString()}</span>
-              </div>
-              
-              <div className="glass-panel border border-slate-900 rounded-2xl p-5">
-                <span className="text-[10px] font-bold text-slate-500 uppercase block tracking-wider">Month Net Revenue</span>
-                <span className="text-xl font-extrabold text-indigo-400 block mt-1">৳{targetMonthData.income.toLocaleString()}</span>
-              </div>
-
-              <div className="glass-panel border border-slate-900 rounded-2xl p-5">
-                <span className="text-[10px] font-bold text-slate-500 uppercase block tracking-wider">Month Cost Overheads</span>
-                <span className="text-xl font-extrabold text-rose-400 block mt-1">৳{targetMonthData.expenses.toLocaleString()}</span>
+                <span className="text-[10px] font-bold text-slate-500 uppercase block tracking-wider">
+                  Month Sales Volume
+                </span>
+                <span className="text-xl font-extrabold text-white block mt-1">
+                  ৳{targetMonthData.sales.toLocaleString()}
+                </span>
               </div>
 
               <div className="glass-panel border border-slate-900 rounded-2xl p-5">
-                <span className="text-[10px] font-bold text-slate-500 uppercase block tracking-wider">Month Profit / Loss</span>
-                <span className={`text-xl font-extrabold block mt-1 ${targetMonthData.profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                <span className="text-[10px] font-bold text-slate-500 uppercase block tracking-wider">
+                  Month Net Revenue
+                </span>
+                <span className="text-xl font-extrabold text-indigo-400 block mt-1">
+                  ৳{targetMonthData.income.toLocaleString()}
+                </span>
+              </div>
+
+              <div className="glass-panel border border-slate-900 rounded-2xl p-5">
+                <span className="text-[10px] font-bold text-slate-500 uppercase block tracking-wider">
+                  Month Cost Overheads
+                </span>
+                <span className="text-xl font-extrabold text-rose-400 block mt-1">
+                  ৳{targetMonthData.expenses.toLocaleString()}
+                </span>
+              </div>
+
+              <div className="glass-panel border border-slate-900 rounded-2xl p-5">
+                <span className="text-[10px] font-bold text-slate-500 uppercase block tracking-wider">
+                  Month Profit / Loss
+                </span>
+                <span
+                  className={`text-xl font-extrabold block mt-1 ${targetMonthData.profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}
+                >
                   ৳{targetMonthData.profit.toLocaleString()}
                 </span>
               </div>
@@ -176,7 +223,7 @@ export default function HistoryManager({ records, payments }) {
               <Layers className="w-4 h-4 text-slate-500" />
               Month-over-Month Ledger Performance
             </h3>
-            
+
             <div className="overflow-x-auto rounded-xl border border-slate-900/60">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
@@ -190,9 +237,9 @@ export default function HistoryManager({ records, payments }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-900/40 text-slate-300">
-                  {monthlyMetricsSummary.map((m) => (
-                    <tr 
-                      key={m.month} 
+                  {monthlyMetricsSummary.map(m => (
+                    <tr
+                      key={m.month}
                       className={`hover:bg-slate-900/10 cursor-pointer transition-all ${
                         selectedMonth === m.month ? 'bg-indigo-600/5 text-white font-medium' : ''
                       }`}
@@ -200,15 +247,23 @@ export default function HistoryManager({ records, payments }) {
                     >
                       <td className="p-3 font-bold">{m.month}</td>
                       <td className="p-3">৳{m.sales.toLocaleString()}</td>
-                      <td className="p-3 text-indigo-400 font-semibold">৳{m.income.toLocaleString()}</td>
+                      <td className="p-3 text-indigo-400 font-semibold">
+                        ৳{m.income.toLocaleString()}
+                      </td>
                       <td className="p-3 text-rose-400/90">৳{m.expenses.toLocaleString()}</td>
-                      <td className={`p-3 font-bold ${m.profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      <td
+                        className={`p-3 font-bold ${m.profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}
+                      >
                         ৳{m.profit.toLocaleString()}
                       </td>
                       <td className="p-3 text-center">
-                        <span className={`px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase border ${
-                          m.profit >= 0 ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-400' : 'bg-rose-500/5 border-rose-500/10 text-rose-400'
-                        }`}>
+                        <span
+                          className={`px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase border ${
+                            m.profit >= 0
+                              ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-400'
+                              : 'bg-rose-500/5 border-rose-500/10 text-rose-400'
+                          }`}
+                        >
                           {m.profit >= 0 ? 'Profit' : 'Loss'}
                         </span>
                       </td>
@@ -228,7 +283,7 @@ export default function HistoryManager({ records, payments }) {
                   <FileSpreadsheet className="w-4 h-4 text-slate-500" />
                   {selectedMonth} Sales Records Archive
                 </h3>
-                
+
                 <div className="max-h-80 overflow-y-auto border border-slate-900 rounded-xl">
                   <table className="w-full text-left text-[11px]">
                     <thead className="bg-slate-950 text-slate-400 sticky top-0 font-bold">
@@ -243,16 +298,30 @@ export default function HistoryManager({ records, payments }) {
                     <tbody className="divide-y divide-slate-900/40 text-slate-300">
                       {targetMonthData.records.length === 0 ? (
                         <tr>
-                          <td colSpan="5" className="p-4 text-center text-slate-600">No records found.</td>
+                          <td colSpan="5" className="p-4 text-center text-slate-600">
+                            No records found.
+                          </td>
                         </tr>
                       ) : (
                         targetMonthData.records.map((r, i) => (
                           <tr key={r.id || i} className="hover:bg-slate-900/10">
-                            <td className="p-2.5 text-slate-500">{new Date(r.date).toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
+                            <td className="p-2.5 text-slate-500">
+                              {new Date(r.date).toLocaleString([], {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </td>
                             <td className="p-2.5 font-semibold">{r.merchantName}</td>
-                            <td className="p-2.5 text-emerald-400">৳{Number(r.salesAmount || 0).toLocaleString()}</td>
+                            <td className="p-2.5 text-emerald-400">
+                              ৳{Number(r.salesAmount || 0).toLocaleString()}
+                            </td>
                             <td className="p-2.5 text-slate-500">{r.salesType}</td>
-                            <td className="p-2.5 font-bold text-indigo-400">৳{Number(r.merchantBill || 0).toLocaleString()}</td>
+                            <td className="p-2.5 font-bold text-indigo-400">
+                              ৳{Number(r.merchantBill || 0).toLocaleString()}
+                            </td>
                           </tr>
                         ))
                       )}
@@ -267,7 +336,7 @@ export default function HistoryManager({ records, payments }) {
                   <FileSpreadsheet className="w-4 h-4 text-slate-500" />
                   {selectedMonth} Payouts Archive
                 </h3>
-                
+
                 <div className="max-h-80 overflow-y-auto border border-slate-900 rounded-xl">
                   <table className="w-full text-left text-[11px]">
                     <thead className="bg-slate-950 text-slate-400 sticky top-0 font-bold">
@@ -281,15 +350,29 @@ export default function HistoryManager({ records, payments }) {
                     <tbody className="divide-y divide-slate-900/40 text-slate-300">
                       {targetMonthData.payments.length === 0 ? (
                         <tr>
-                          <td colSpan="4" className="p-4 text-center text-slate-600">No payouts logged.</td>
+                          <td colSpan="4" className="p-4 text-center text-slate-600">
+                            No payouts logged.
+                          </td>
                         </tr>
                       ) : (
                         targetMonthData.payments.map((p, i) => (
                           <tr key={p.id || i} className="hover:bg-slate-900/10">
-                            <td className="p-2.5 text-slate-500">{new Date(p.date).toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
+                            <td className="p-2.5 text-slate-500">
+                              {new Date(p.date).toLocaleString([], {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </td>
                             <td className="p-2.5 font-semibold">{p.merchantName}</td>
-                            <td className="p-2.5 font-bold text-emerald-400">৳{Number(p.paidAmount || 0).toLocaleString()}</td>
-                            <td className="p-2.5 text-slate-500 italic max-w-xs truncate">{p.notes || '—'}</td>
+                            <td className="p-2.5 font-bold text-emerald-400">
+                              ৳{Number(p.paidAmount || 0).toLocaleString()}
+                            </td>
+                            <td className="p-2.5 text-slate-500 italic max-w-xs truncate">
+                              {p.notes || '—'}
+                            </td>
                           </tr>
                         ))
                       )}

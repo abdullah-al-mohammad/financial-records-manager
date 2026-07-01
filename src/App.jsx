@@ -222,12 +222,7 @@ export default function App() {
     }
   };
 
-  // Bridge navigation from Expense logs to Sales drawer edit
-  const handleEditFromExpense = (record) => {
-    setEditTarget(record);
-    setActiveTab('sales');
-  };
-
+  // Bridge navigation from Expense logs to Sales drawer edit (legacy — no longer used)
   const clearEditTarget = () => {
     setEditTarget(null);
   };
@@ -252,6 +247,7 @@ export default function App() {
         return (
           <SalesManager
             records={records}
+            payments={payments}
             merchants={merchants}
             onAddRecord={handleAddRecord}
             onUpdateRecord={handleUpdateRecord}
@@ -263,9 +259,14 @@ export default function App() {
         );
       case 'expenses':
         return (
-          <ExpenseManager 
-            records={records} 
-            onEditRecord={handleEditFromExpense} 
+          <ExpenseManager
+            records={records}
+            payments={payments}
+            merchants={merchants}
+            onAddRecord={handleAddRecord}
+            onUpdateRecord={handleUpdateRecord}
+            onDeleteRecord={handleDeleteRecord}
+            onAddMerchant={handleAddMerchant}
           />
         );
       case 'billing':

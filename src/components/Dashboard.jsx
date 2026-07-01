@@ -1,29 +1,41 @@
-import { useState, useMemo } from 'react';
 import {
-  TrendingUp,
-  TrendingDown,
-  ShoppingBag,
-  Receipt,
-  Landmark,
-  DollarSign,
-  PiggyBank,
   Activity,
-  PlusCircle,
   CreditCard,
-  Printer
+  DollarSign,
+  Landmark,
+  PiggyBank,
+  PlusCircle,
+  Printer,
+  Receipt,
+  ShoppingBag,
+  TrendingDown,
+  TrendingUp,
 } from 'lucide-react';
+import { useMemo } from 'react';
+import { computeNetCashBalance } from '../utils/finance';
 
 export default function Dashboard({ records, payments, setActiveTab }) {
   const MONTHS_ORDER = [
-    'January', 'February', 'March', 'April', 'May', 'June', 
-    'July', 'August', 'September', 'October', 'November', 'December'
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
   ];
 
-  const paymentTotals = useMemo(() => {
-    let totalPaid = 0;
-    let online = 0;
-    let onlineRecords = [];
+  const balanceSummary = useMemo(
+    () => computeNetCashBalance(records, payments || []),
+    [records, payments]
+  );
 
+  const paymentTotals = useMemo(() => {
     const onlineMethods = [
       'bkash',
       'nagad',
@@ -32,25 +44,24 @@ export default function Dashboard({ records, payments, setActiveTab }) {
       'sslcommerz',
       'card',
       'mobile banking',
+      'internet banking',
+      'bank transfer',
       'online',
     ];
 
-    records.forEach(r => {
-      const amount = Number(r.paidByCustomer) || 0;
-      totalPaid += amount;
+    const onlineRecords = records.filter(r => {
       const method = String(r.digitalPaymentMethod || r.paymentMethod || '')
         .trim()
         .toLowerCase();
-      
-      const isOnline = onlineMethods.includes(method);
-      if (isOnline) {
-        online += amount;
-        onlineRecords.push(r);
-      }
+      return onlineMethods.includes(method);
     });
-    const cash = totalPaid - online;
-    return { online, cash, onlineRecords };
-  }, [records]);
+
+    return {
+      online: balanceSummary.onlineBalance,
+      cash: balanceSummary.cashBalance,
+      onlineRecords,
+    };
+  }, [balanceSummary, records]);
 
   // Aggregate stats across all records
   const stats = useMemo(() => {
@@ -112,7 +123,7 @@ export default function Dashboard({ records, payments, setActiveTab }) {
       riderSalaries,
       otherExpenses,
       fixedExpenses,
-      merchantTotals
+      merchantTotals,
     };
   }, [records, payments]);
 
@@ -125,8 +136,12 @@ export default function Dashboard({ records, payments, setActiveTab }) {
         monthsMap[r.month] = { sales: 0, expenses: 0, income: 0 };
       }
       monthsMap[r.month].sales += parseFloat(r.salesAmount) || 0;
-      monthsMap[r.month].income += (parseFloat(r.commissionAmount) || 0) + (parseFloat(r.deliveryCharge) || 0);
-      monthsMap[r.month].expenses += (parseFloat(r.riderSalary) || 0) + (parseFloat(r.otherExpense) || 0) + (parseFloat(r.fixedExpense) || 0);
+      monthsMap[r.month].income +=
+        (parseFloat(r.commissionAmount) || 0) + (parseFloat(r.deliveryCharge) || 0);
+      monthsMap[r.month].expenses +=
+        (parseFloat(r.riderSalary) || 0) +
+        (parseFloat(r.otherExpense) || 0) +
+        (parseFloat(r.fixedExpense) || 0);
     });
 
     // Sort based on calendar order
@@ -137,7 +152,7 @@ export default function Dashboard({ records, payments, setActiveTab }) {
         month,
         sales: monthsMap[month].sales,
         expenses: monthsMap[month].expenses,
-        income: monthsMap[month].income
+        income: monthsMap[month].income,
       }));
   }, [records]);
 
@@ -146,7 +161,8 @@ export default function Dashboard({ records, payments, setActiveTab }) {
     const merchants = {};
     records.forEach(r => {
       if (!r.merchantName) return;
-      merchants[r.merchantName] = (merchants[r.merchantName] || 0) + (parseFloat(r.salesAmount) || 0);
+      merchants[r.merchantName] =
+        (merchants[r.merchantName] || 0) + (parseFloat(r.salesAmount) || 0);
     });
     return Object.entries(merchants)
       .map(([name, sales]) => ({ name, sales }))
@@ -159,24 +175,36 @@ export default function Dashboard({ records, payments, setActiveTab }) {
     const currentMonthIdx = new Date().getMonth();
     const currentYear = new Date().getFullYear();
     const MONTHS = [
-      'January', 'February', 'March', 'April', 'May', 'June', 
-      'July', 'August', 'September', 'October', 'November', 'December'
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
     ];
-    
+
     const merchantPriorDues = {};
 
     records.forEach(r => {
       if (!r.merchantName) return;
-      
+
       let isPrior = false;
       if (r.date) {
         const d = new Date(r.date.includes('T') ? r.date : r.date + 'T00:00:00');
-        isPrior = d.getFullYear() < currentYear || (d.getFullYear() === currentYear && d.getMonth() < currentMonthIdx);
+        isPrior =
+          d.getFullYear() < currentYear ||
+          (d.getFullYear() === currentYear && d.getMonth() < currentMonthIdx);
       } else if (r.month) {
         const idx = MONTHS.indexOf(r.month);
         isPrior = idx !== -1 && idx < currentMonthIdx;
       }
-      
+
       if (isPrior) {
         if (!merchantPriorDues[r.merchantName]) {
           merchantPriorDues[r.merchantName] = { billed: 0, paid: 0 };
@@ -187,13 +215,15 @@ export default function Dashboard({ records, payments, setActiveTab }) {
 
     payments.forEach(p => {
       if (!p.merchantName) return;
-      
+
       let isPrior = false;
       if (p.date) {
         const d = new Date(p.date.includes('T') ? p.date : p.date + 'T00:00:00');
-        isPrior = d.getFullYear() < currentYear || (d.getFullYear() === currentYear && d.getMonth() < currentMonthIdx);
+        isPrior =
+          d.getFullYear() < currentYear ||
+          (d.getFullYear() === currentYear && d.getMonth() < currentMonthIdx);
       }
-      
+
       if (isPrior) {
         if (!merchantPriorDues[p.merchantName]) {
           merchantPriorDues[p.merchantName] = { billed: 0, paid: 0 };
@@ -205,7 +235,7 @@ export default function Dashboard({ records, payments, setActiveTab }) {
     return Object.entries(merchantPriorDues)
       .map(([name, data]) => ({
         name,
-        due: data.billed - data.paid
+        due: data.billed - data.paid,
       }))
       .filter(m => m.due > 0)
       .sort((a, b) => b.due - a.due);
@@ -217,9 +247,24 @@ export default function Dashboard({ records, payments, setActiveTab }) {
     if (total === 0) return [];
 
     return [
-      { name: 'Rider Salaries', value: stats.riderSalaries, color: '#f43f5e', percentage: (stats.riderSalaries / total) * 100 },
-      { name: 'Fixed Expenses', value: stats.fixedExpenses, color: '#eab308', percentage: (stats.fixedExpenses / total) * 100 },
-      { name: 'Other Expenses', value: stats.otherExpenses, color: '#a855f7', percentage: (stats.otherExpenses / total) * 100 }
+      {
+        name: 'Rider Salaries',
+        value: stats.riderSalaries,
+        color: '#f43f5e',
+        percentage: (stats.riderSalaries / total) * 100,
+      },
+      {
+        name: 'Fixed Expenses',
+        value: stats.fixedExpenses,
+        color: '#eab308',
+        percentage: (stats.fixedExpenses / total) * 100,
+      },
+      {
+        name: 'Other Expenses',
+        value: stats.otherExpenses,
+        color: '#a855f7',
+        percentage: (stats.otherExpenses / total) * 100,
+      },
     ].filter(item => item.value > 0);
   }, [stats]);
 
@@ -233,9 +278,10 @@ export default function Dashboard({ records, payments, setActiveTab }) {
     const circumference = 2 * Math.PI * radius;
 
     return expensePieData.map((item, index) => {
-      const angle = (item.value / (stats.riderSalaries + stats.fixedExpenses + stats.otherExpenses)) * 360;
+      const angle =
+        (item.value / (stats.riderSalaries + stats.fixedExpenses + stats.otherExpenses)) * 360;
       const strokeDashArray = `${(item.value / (stats.riderSalaries + stats.fixedExpenses + stats.otherExpenses)) * circumference} ${circumference}`;
-      const strokeDashOffset = - (cumulativeAngle / 360) * circumference;
+      const strokeDashOffset = -(cumulativeAngle / 360) * circumference;
       cumulativeAngle += angle;
 
       return (
@@ -314,7 +360,7 @@ export default function Dashboard({ records, payments, setActiveTab }) {
             accent: 'border-indigo-500/20',
             text: 'text-indigo-400',
             bg: 'bg-indigo-500/10',
-            subtitle: 'Total transactions registered'
+            subtitle: 'Total transactions registered',
           },
           {
             title: 'Total Revenue (Income)',
@@ -324,7 +370,7 @@ export default function Dashboard({ records, payments, setActiveTab }) {
             accent: 'border-emerald-500/20',
             text: 'text-emerald-400',
             bg: 'bg-emerald-500/10',
-            subtitle: 'Commissions + Delivery charges'
+            subtitle: 'Commissions + Delivery charges',
           },
           {
             title: 'Aggregate Overheads',
@@ -334,7 +380,7 @@ export default function Dashboard({ records, payments, setActiveTab }) {
             accent: 'border-rose-500/20',
             text: 'text-rose-400',
             bg: 'bg-rose-500/10',
-            subtitle: 'Salaries, fixed & other expenses'
+            subtitle: 'Salaries, fixed & other expenses',
           },
           {
             title: 'Net Profit / Loss',
@@ -344,18 +390,20 @@ export default function Dashboard({ records, payments, setActiveTab }) {
             accent: stats.netProfit >= 0 ? 'border-emerald-500/20' : 'border-rose-500/20',
             text: stats.netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400',
             bg: stats.netProfit >= 0 ? 'bg-emerald-500/10' : 'bg-rose-500/10',
-            subtitle: 'Net income minus expenses'
-          }
+            subtitle: 'Net income minus expenses',
+          },
         ].map((c, i) => {
           const Icon = c.icon;
           return (
-            <div 
-              key={i} 
+            <div
+              key={i}
               className={`glass-panel rounded-2xl p-5 border ${c.accent} relative overflow-hidden transition-all duration-300 hover:border-slate-700`}
               style={{ boxShadow: `0 8px 32px 0 rgba(0, 0, 0, 0.2), 0 0 16px ${c.glow}` }}
             >
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{c.title}</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  {c.title}
+                </span>
                 <div className={`p-2 rounded-xl ${c.bg} ${c.text}`}>
                   <Icon className="w-4 h-4" />
                 </div>
@@ -377,11 +425,15 @@ export default function Dashboard({ records, payments, setActiveTab }) {
               <Landmark className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Merchant Unpaid Bills</span>
-              <span className="text-xl font-bold text-white tracking-tight block mt-1">৳{stats.totalDues.toLocaleString()}</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                Merchant Unpaid Bills
+              </span>
+              <span className="text-xl font-bold text-white tracking-tight block mt-1">
+                ৳{stats.totalDues.toLocaleString()}
+              </span>
             </div>
           </div>
-          <button 
+          <button
             onClick={() => setActiveTab('billing')}
             className="text-[11px] font-bold text-rose-400 hover:text-rose-300 py-1.5 px-3 rounded-lg bg-rose-500/5 hover:bg-rose-500/10 transition-all cursor-pointer"
           >
@@ -395,11 +447,15 @@ export default function Dashboard({ records, payments, setActiveTab }) {
               <PiggyBank className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Other Cash Collected</span>
-              <span className="text-xl font-bold text-white tracking-tight block mt-1">৳{stats.otherCash.toLocaleString()}</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                Other Cash Collected
+              </span>
+              <span className="text-xl font-bold text-white tracking-tight block mt-1">
+                ৳{stats.otherCash.toLocaleString()}
+              </span>
             </div>
           </div>
-          <button 
+          <button
             onClick={() => setActiveTab('sales')}
             className="text-[11px] font-bold text-indigo-400 hover:text-indigo-300 py-1.5 px-3 rounded-lg bg-indigo-500/5 hover:bg-indigo-500/10 transition-all cursor-pointer"
           >
@@ -416,11 +472,15 @@ export default function Dashboard({ records, payments, setActiveTab }) {
               <CreditCard className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Online Payments Received ({paymentTotals.onlineRecords.length})</span>
-              <span className="text-xl font-bold text-white tracking-tight block mt-1">৳{paymentTotals.online.toLocaleString()}</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                Online Balance ({paymentTotals.onlineRecords.length})
+              </span>
+              <span className="text-xl font-bold text-white tracking-tight block mt-1">
+                ৳{paymentTotals.online.toLocaleString()}
+              </span>
             </div>
           </div>
-          <button 
+          <button
             onClick={() => setActiveTab('sales')}
             className="text-[11px] font-bold text-indigo-400 hover:text-indigo-300 py-1.5 px-3 rounded-lg bg-indigo-500/5 hover:bg-indigo-500/10 transition-all cursor-pointer"
           >
@@ -433,11 +493,15 @@ export default function Dashboard({ records, payments, setActiveTab }) {
               <PiggyBank className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Cash in Hand</span>
-              <span className="text-xl font-bold text-white tracking-tight block mt-1">৳{paymentTotals.cash.toLocaleString()}</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                Cash in Hand Balance
+              </span>
+              <span className="text-xl font-bold text-white tracking-tight block mt-1">
+                ৳{paymentTotals.cash.toLocaleString()}
+              </span>
             </div>
           </div>
-          <button 
+          <button
             onClick={() => setActiveTab('sales')}
             className="text-[11px] font-bold text-rose-400 hover:text-rose-300 py-1.5 px-3 rounded-lg bg-rose-500/5 hover:bg-rose-500/10 transition-all cursor-pointer"
           >
@@ -450,7 +514,9 @@ export default function Dashboard({ records, payments, setActiveTab }) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Month-over-Month Column Chart */}
         <div className="lg:col-span-2 glass-panel border border-slate-900 rounded-2xl p-5">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-6">Sales vs Expenses MoM Volume</h3>
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-6">
+            Sales vs Expenses MoM Volume
+          </h3>
           {momData.length === 0 ? (
             <div className="h-64 flex items-center justify-center text-xs text-slate-500">
               No historical data available. Create records to view chart.
@@ -464,9 +530,24 @@ export default function Dashboard({ records, payments, setActiveTab }) {
                   const val = Math.round(maxMoMVal * (1 - p));
                   return (
                     <g key={idx} className="opacity-30">
-                      <line x1="45" y1={y} x2="480" y2={y} stroke="#334155" strokeWidth="0.5" strokeDasharray="3 3" />
-                      <text x="35" y={y + 4} textAnchor="end" fill="#94a3b8" fontSize="9" fontWeight="500">
-                        {val >= 1000 ? `${(val/1000).toFixed(0)}k` : val}
+                      <line
+                        x1="45"
+                        y1={y}
+                        x2="480"
+                        y2={y}
+                        stroke="#334155"
+                        strokeWidth="0.5"
+                        strokeDasharray="3 3"
+                      />
+                      <text
+                        x="35"
+                        y={y + 4}
+                        textAnchor="end"
+                        fill="#94a3b8"
+                        fontSize="9"
+                        fontWeight="500"
+                      >
+                        {val >= 1000 ? `${(val / 1000).toFixed(0)}k` : val}
                       </text>
                     </g>
                   );
@@ -476,10 +557,10 @@ export default function Dashboard({ records, payments, setActiveTab }) {
                 {momData.map((d, idx) => {
                   const step = 430 / momData.length;
                   const xBase = 55 + idx * step;
-                  
+
                   const salesHeight = (d.sales / maxMoMVal) * 160;
                   const salesY = 180 - salesHeight;
-                  
+
                   const expensesHeight = (d.expenses / maxMoMVal) * 160;
                   const expensesY = 180 - expensesHeight;
 
@@ -523,10 +604,14 @@ export default function Dashboard({ records, payments, setActiveTab }) {
                 {/* Legend */}
                 <g transform="translate(180, 225)" fontSize="9" fontWeight="600">
                   <circle cx="10" cy="5" r="4" fill="#6366f1" />
-                  <text x="20" y="8" fill="#94a3b8">Sales Volume</text>
-                  
+                  <text x="20" y="8" fill="#94a3b8">
+                    Sales Volume
+                  </text>
+
                   <circle cx="95" cy="5" r="4" fill="#f43f5e" />
-                  <text x="105" y="8" fill="#94a3b8">Expenses</text>
+                  <text x="105" y="8" fill="#94a3b8">
+                    Expenses
+                  </text>
                 </g>
 
                 {/* SVG Gradients */}
@@ -547,7 +632,9 @@ export default function Dashboard({ records, payments, setActiveTab }) {
 
         {/* Expense breakdown chart (Donut) */}
         <div className="glass-panel border border-slate-900 rounded-2xl p-5">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-6">Expense Distribution</h3>
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-6">
+            Expense Distribution
+          </h3>
           {expensePieData.length === 0 ? (
             <div className="h-64 flex items-center justify-center text-xs text-slate-500">
               No expenses recorded yet.
@@ -557,9 +644,30 @@ export default function Dashboard({ records, payments, setActiveTab }) {
               <svg className="w-40 h-40" viewBox="0 0 160 160">
                 {renderDonutPaths()}
                 <circle cx="80" cy="80" r="46" fill="#0b101e" />
-                <text x="80" y="77" textAnchor="middle" fill="#94a3b8" fontSize="8" fontWeight="bold">TOTAL</text>
-                <text x="80" y="93" textAnchor="middle" fill="#ffffff" fontSize="11" fontWeight="bold">
-                  ৳{(stats.riderSalaries + stats.fixedExpenses + stats.otherExpenses).toLocaleString()}
+                <text
+                  x="80"
+                  y="77"
+                  textAnchor="middle"
+                  fill="#94a3b8"
+                  fontSize="8"
+                  fontWeight="bold"
+                >
+                  TOTAL
+                </text>
+                <text
+                  x="80"
+                  y="93"
+                  textAnchor="middle"
+                  fill="#ffffff"
+                  fontSize="11"
+                  fontWeight="bold"
+                >
+                  ৳
+                  {(
+                    stats.riderSalaries +
+                    stats.fixedExpenses +
+                    stats.otherExpenses
+                  ).toLocaleString()}
                 </text>
               </svg>
 
@@ -567,10 +675,15 @@ export default function Dashboard({ records, payments, setActiveTab }) {
                 {expensePieData.map((item, idx) => (
                   <div key={idx} className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                      <span
+                        className="w-2.5 h-2.5 rounded-full"
+                        style={{ backgroundColor: item.color }}
+                      />
                       <span className="text-slate-400 font-medium">{item.name}</span>
                     </div>
-                    <span className="font-bold text-white">৳{item.value.toLocaleString()} ({item.percentage.toFixed(0)}%)</span>
+                    <span className="font-bold text-white">
+                      ৳{item.value.toLocaleString()} ({item.percentage.toFixed(0)}%)
+                    </span>
                   </div>
                 ))}
               </div>
@@ -583,7 +696,9 @@ export default function Dashboard({ records, payments, setActiveTab }) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Top Merchants Leaderboard */}
         <div className="glass-panel border border-slate-900 rounded-2xl p-5">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">Top Merchants by Volume</h3>
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">
+            Top Merchants by Volume
+          </h3>
           {topMerchants.length === 0 ? (
             <div className="py-6 text-center text-xs text-slate-500">
               No merchants registered yet.
@@ -602,8 +717,8 @@ export default function Dashboard({ records, payments, setActiveTab }) {
                       <span className="font-bold text-indigo-400">৳{m.sales.toLocaleString()}</span>
                     </div>
                     <div className="h-1.5 w-full bg-slate-900 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-indigo-500 to-violet-600 rounded-full"
+                      <div
+                        className="h-full bg-linear-to-r from-indigo-500 to-violet-600 rounded-full"
                         style={{ width: `${percentage}%` }}
                       />
                     </div>
@@ -629,8 +744,11 @@ export default function Dashboard({ records, payments, setActiveTab }) {
               </div>
             ) : (
               <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
-                {previousMonthDues.map((m) => (
-                  <div key={m.name} className="flex justify-between items-center text-xs py-1.5 border-b border-slate-900/60 last:border-b-0">
+                {previousMonthDues.map(m => (
+                  <div
+                    key={m.name}
+                    className="flex justify-between items-center text-xs py-1.5 border-b border-slate-900/60 last:border-b-0"
+                  >
                     <span className="font-semibold text-slate-200">{m.name}</span>
                     <span className="font-bold text-rose-400">৳{m.due.toLocaleString()}</span>
                   </div>
@@ -639,7 +757,9 @@ export default function Dashboard({ records, payments, setActiveTab }) {
             )}
           </div>
           <div className="pt-3 border-t border-slate-900 mt-4 flex items-center justify-between">
-            <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider block">Total Outstanding Prior</span>
+            <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider block">
+              Total Outstanding Prior
+            </span>
             <span className="text-sm font-extrabold text-rose-400 block">
               ৳{previousMonthDues.reduce((sum, m) => sum + m.due, 0).toLocaleString()}
             </span>
@@ -648,25 +768,46 @@ export default function Dashboard({ records, payments, setActiveTab }) {
 
         {/* Latest Audit / System Logs preview */}
         <div className="glass-panel border border-slate-900 rounded-2xl p-5">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">Recent Records Added</h3>
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">
+            Recent Records Added
+          </h3>
           {records.length === 0 ? (
-            <div className="py-6 text-center text-xs text-slate-500">
-              No recent entries found.
-            </div>
+            <div className="py-6 text-center text-xs text-slate-500">No recent entries found.</div>
           ) : (
             <div className="divide-y divide-slate-900/60 max-h-48 overflow-y-auto pr-1">
-              {records.slice(-4).reverse().map((r, i) => (
-                <div key={r.id || i} className="py-2.5 flex items-center justify-between text-xs first:pt-0 last:pb-0">
-                  <div>
-                    <span className="font-bold text-slate-200 block">{r.merchantName || 'Generic Transaction'}</span>
-                    <span className="text-[10px] text-slate-500">{new Date(r.date).toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} — {r.salesType}</span>
+              {records
+                .slice(-4)
+                .reverse()
+                .map((r, i) => (
+                  <div
+                    key={r.id || i}
+                    className="py-2.5 flex items-center justify-between text-xs first:pt-0 last:pb-0"
+                  >
+                    <div>
+                      <span className="font-bold text-slate-200 block">
+                        {r.merchantName || 'Generic Transaction'}
+                      </span>
+                      <span className="text-[10px] text-slate-500">
+                        {new Date(r.date).toLocaleString([], {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}{' '}
+                        — {r.salesType}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-bold text-emerald-400 block">
+                        ৳{Number(r.salesAmount || 0).toLocaleString()}
+                      </span>
+                      <span className="text-[10px] text-slate-500">
+                        Com. ৳{Number(r.commissionAmount || 0).toLocaleString()}
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <span className="font-bold text-emerald-400 block">৳{Number(r.salesAmount || 0).toLocaleString()}</span>
-                    <span className="text-[10px] text-slate-500">Com. ৳{Number(r.commissionAmount || 0).toLocaleString()}</span>
-                  </div>
-                </div>
-              ))}
+                ))}
             </div>
           )}
         </div>

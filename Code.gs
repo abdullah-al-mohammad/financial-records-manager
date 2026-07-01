@@ -91,10 +91,17 @@ function getAuditSheet() {
 }
 
 // Helper: convert row array to object based on headers
+function formatCellValue(value) {
+  if (value instanceof Date) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd\'T\'HH:mm:ss');
+  }
+  return value !== undefined && value !== null ? String(value) : '';
+}
+
 function rowToObject(row, headers) {
   const obj = {};
   headers.forEach((h, i) => {
-    obj[h] = row[i] !== undefined ? String(row[i]) : '';
+    obj[h] = formatCellValue(row[i]);
   });
   return obj;
 }

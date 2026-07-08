@@ -50,32 +50,35 @@ export default function HistoryManager({ records, payments }) {
     const summaries = {};
 
     records.forEach(r => {
-      if (!r.month) return;
-      if (!summaries[r.month]) {
-        summaries[r.month] = {
-          month: r.month,
+      const month = r.month || getMonthFromDate(r.date);
+      if (!month) return;
+      if (!summaries[month]) {
+        summaries[month] = {
+          month,
           sales: 0,
           billed: 0,
           commission: 0,
           delivery: 0,
           expenses: 0,
+          income: 0,
           profit: 0,
         };
       }
-      summaries[r.month].sales += parseFloat(r.salesAmount) || 0;
-      summaries[r.month].commission += parseFloat(r.commissionAmount) || 0;
-      summaries[r.month].delivery += parseFloat(r.deliveryCharge) || 0;
-      summaries[r.month].expenses +=
+      summaries[month].sales += parseFloat(r.salesAmount) || 0;
+      summaries[month].commission += parseFloat(r.commissionAmount) || 0;
+      summaries[month].delivery += parseFloat(r.deliveryCharge) || 0;
+      summaries[month].billed += parseFloat(r.merchantBill) || 0;
+      summaries[month].expenses +=
         (parseFloat(r.riderSalary) || 0) +
         (parseFloat(r.otherExpense) || 0) +
         (parseFloat(r.fixedExpense) || 0);
     });
 
-    // Compute derived metrics
+    // Compute derived metrics and store them back
     Object.keys(summaries).forEach(m => {
       const s = summaries[m];
-      const income = s.commission + s.delivery;
-      s.profit = income - s.expenses;
+      s.income = s.commission + s.delivery;
+      s.profit = s.income - s.expenses;
     });
 
     return Object.values(summaries).sort(

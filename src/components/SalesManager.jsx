@@ -1,6 +1,6 @@
 import { Calendar, Edit2, Plus, Search, SlidersHorizontal, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { computeNetCashBalance } from '../utils/finance';
+import { toast } from 'react-toastify';
 
 const MONTHS = [
   'January',
@@ -178,7 +178,7 @@ export default function SalesManager({
     if (isSubmitting) return; // prevent double submission
     setIsSubmitting(true);
     if (!editingId && form.salesAmount && form.salesAmount !== '' && !form.merchantName) {
-      alert('Merchant name is required for sales records');
+      toast.error('Merchant name is required for sales records');
       setIsSubmitting(false);
       return;
     }
@@ -224,7 +224,13 @@ export default function SalesManager({
   };
 
   const visibleRecords = useMemo(
-    () => records.filter(r => (parseFloat(r.salesAmount) || 0) > 0),
+    () =>
+      records.filter(
+        r =>
+          (parseFloat(r.salesAmount) || 0) > 0 ||
+          (parseFloat(r.deliveryCharge) || 0) > 0 ||
+          (parseFloat(r.otherCashAmount) || 0) > 0
+      ),
     [records]
   );
 
@@ -241,24 +247,7 @@ export default function SalesManager({
     });
   }, [visibleRecords, searchTerm, filterMonth, filterType]);
 
-  const totalOnline = useMemo(() => {
-    return visibleRecords.reduce((sum, r) => {
-      const amount = Number(r.paidByCustomer || r.salesAmount || 0);
-      return getPaymentBucket(r.digitalPaymentMethod) === 'online' ? sum + amount : sum;
-    }, 0);
-  }, [visibleRecords]);
 
-  const totalCash = useMemo(() => {
-    return visibleRecords.reduce((sum, r) => {
-      const amount = Number(r.paidByCustomer || r.salesAmount || 0);
-      return getPaymentBucket(r.digitalPaymentMethod) === 'cash' ? sum + amount : sum;
-    }, 0);
-  }, [visibleRecords]);
-
-  const cashBalance = useMemo(
-    () => computeNetCashBalance(records, payments || []),
-    [records, payments]
-  );
 
   return (
     <div className="space-y-6">
@@ -294,43 +283,7 @@ export default function SalesManager({
         </div>
       </div>
 
-      {/* Dashboard Summary Boxes */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-        <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
-          <h3 className="text-xs font-medium text-indigo-400 uppercase tracking-wider mb-1">
-            Online Balance
-          </h3>
-          <p className="text-2xl font-bold text-emerald-400">
-            ৳{Number(cashBalance.onlineBalance).toLocaleString()}
-          </p>
-        </div>
-        <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
-          <h3 className="text-xs font-medium text-indigo-400 uppercase tracking-wider mb-1">
-            Cash in Hand Balance
-          </h3>
-          <p className="text-2xl font-bold text-emerald-400">
-            ৳{Number(cashBalance.cashBalance).toLocaleString()}
-          </p>
-        </div>
-        <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
-          <h3 className="text-xs font-medium text-rose-400 uppercase tracking-wider mb-1">
-            Deductions (Expenses + Payouts)
-          </h3>
-          <p className="text-2xl font-bold text-rose-400">
-            ৳{(cashBalance.expenses.total + cashBalance.merchantPayouts).toLocaleString()}
-          </p>
-        </div>
-        <div className="bg-slate-950 border border-amber-500/20 rounded-xl p-4">
-          <h3 className="text-xs font-medium text-amber-400 uppercase tracking-wider mb-1">
-            Net Cash Remaining
-          </h3>
-          <p
-            className={`text-2xl font-bold ${cashBalance.netRemaining >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}
-          >
-            ৳{cashBalance.netRemaining.toLocaleString()}
-          </p>
-        </div>
-      </div>
+
 
       {/* Advanced Filters */}
       {(showFilters || searchTerm) && (
@@ -397,6 +350,7 @@ export default function SalesManager({
                 <th className="p-4 whitespace-nowrap">Bill Amount</th>
                 <th className="p-4 whitespace-nowrap">Discount</th>
                 <th className="p-4 whitespace-nowrap">Delivery</th>
+                <th className="p-4 whitespace-nowrap">Other Cash</th>
                 <th className="p-4 whitespace-nowrap">Payment Method</th>
                 <th className="p-4 whitespace-nowrap">Paid by Cust</th>
                 <th className="p-4 whitespace-nowrap text-center">Actions</th>
@@ -453,6 +407,20 @@ export default function SalesManager({
                     </td>
                     <td className="p-4 whitespace-nowrap text-slate-400">
                       {r.deliveryCharge ? `৳${Number(r.deliveryCharge).toLocaleString()}` : '—'}
+                    </td>
+                     <td className="p-4 whitespace-nowrap text-slate-400">
+                      {r.otherCashAmount && parseFloat(r.otherCashAmount) > 0 ? (
+                        <>
+                          ৳{Number(r.otherCashAmount).toLocaleString()}
+                          {r.otherCashSource && (
+                            <span className="text-[10px] text-slate-500 block">
+                              ({r.otherCashSource})
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        '—'
+                      )}
                     </td>
                     <td className="p-4 whitespace-nowrap text-slate-400">
                       {r.digitalPaymentMethod || '—'}
@@ -618,7 +586,6 @@ export default function SalesManager({
                     </label>
                     <input
                       type="number"
-                      required
                       name="salesAmount"
                       value={form.salesAmount}
                       onChange={handleChange}
@@ -718,6 +685,31 @@ export default function SalesManager({
                   </div>
                 </div>
 
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-medium text-slate-400">Other Cash Source Name</label>
+                    <input
+                      type="text"
+                      name="otherCashSource"
+                      value={form.otherCashSource || ''}
+                      onChange={handleChange}
+                      placeholder="e.g. Loan / Asset Sales"
+                      className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-medium text-slate-400">Other Cash Amount (৳)</label>
+                    <input
+                      type="number"
+                      name="otherCashAmount"
+                      value={form.otherCashAmount || ''}
+                      onChange={handleChange}
+                      placeholder="e.g. 1000"
+                      className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+
                 <div className="space-y-1">
                   <label className="text-[11px] font-medium text-slate-400">Payment Source</label>
                   <select
@@ -728,6 +720,7 @@ export default function SalesManager({
                   >
                     <option value="online">Online</option>
                     <option value="cash">Cash</option>
+                    <option value="other_cash">Other Cash</option>
                   </select>
                 </div>
 

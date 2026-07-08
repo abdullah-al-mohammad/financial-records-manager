@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { toast } from 'react-toastify';
 import { getMonthFromDate } from '../utils/dates';
 import { computeNetCashBalance, sumExpensesFromRecords } from '../utils/finance';
 import OverheadExpenses from './OverheadExpenses';
@@ -204,7 +205,7 @@ export default function ExpenseManager({
     e.preventDefault();
     if (isSubmitting) return;
     if (!hasAnyExpense(form)) {
-      alert('Enter at least one expense amount (rider wage, variable, or fixed).');
+      toast.error('Enter at least one expense amount (rider wage, variable, or fixed).');
       return;
     }
 
@@ -282,15 +283,7 @@ export default function ExpenseManager({
       </div>
 
       {/* Cash balance summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="glass-panel border border-slate-900 rounded-2xl p-5">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-            Online Balance
-          </span>
-          <p className="text-2xl font-bold text-emerald-400 mt-2">
-            ৳{cashBalance.onlineBalance.toLocaleString()}
-          </p>
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="glass-panel border border-slate-900 rounded-2xl p-5">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
             Total Expenses
@@ -301,10 +294,10 @@ export default function ExpenseManager({
         </div>
         <div className="glass-panel border border-slate-900 rounded-2xl p-5">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-            Cash in Hand
+            Other Cash Balance
           </span>
-          <p className="text-2xl font-bold text-amber-400 mt-2">
-            ৳{cashBalance.cashBalance.toLocaleString()}
+          <p className="text-2xl font-bold text-emerald-400 mt-2">
+            ৳{cashBalance.otherCashBalance.toLocaleString()}
           </p>
         </div>
         <div className="glass-panel border border-amber-500/20 rounded-2xl p-5 bg-amber-500/5">

@@ -11,6 +11,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'react-toastify';
 import { compareDates, formatDisplayDate, getMonthFromDate, isDateInRange } from '../utils/dates';
 import {
   getDueBillReminders,
@@ -171,15 +172,15 @@ export default function BillingManager({
   // Handler to print the report exclusively
   const handlePrintReport = () => {
     if (!activeReportMerchant) {
-      alert('Please select a merchant first.');
+      toast.error('Please select a merchant first.');
       return;
     }
     if (!billReportStartDate || !billReportEndDate) {
-      alert('Please select both a start date and end date for the bill report.');
+      toast.error('Please select both a start date and end date for the bill report.');
       return;
     }
     if (billReportStartDate > billReportEndDate) {
-      alert('Start date cannot be after end date.');
+      toast.error('Start date cannot be after end date.');
       return;
     }
 
@@ -337,7 +338,7 @@ export default function BillingManager({
   const handlePaymentSubmit = async e => {
     e.preventDefault();
     if (!selectedMerchant || !paidAmount) {
-      alert('Merchant and payment amount are required');
+      toast.error('Merchant and payment amount are required');
       return;
     }
 

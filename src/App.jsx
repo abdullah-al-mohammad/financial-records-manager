@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
+import { toast, ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import Login from './components/Login';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -8,7 +10,7 @@ import BillingManager from './components/BillingManager';
 import HistoryManager from './components/HistoryManager';
 import AdminPanel from './components/AdminPanel';
 import { api, getCurrentSession, clearSession } from './utils/api';
-import { AlertCircle, CheckCircle } from 'lucide-react';
+import BillReminderManager from './components/BillReminderManager';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -22,14 +24,15 @@ export default function App() {
 
   // States
   const [loading, setLoading] = useState(false);
-  const [toast, setToast] = useState(null);
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem('financial_manager_theme') || 'auto';
   });
 
   const showToast = useCallback((msg, type = 'success') => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 4000);
+    if (type === 'error') toast.error(msg);
+    else if (type === 'warning') toast.warn(msg);
+    else if (type === 'info') toast.info(msg);
+    else toast.success(msg);
   }, []);
 
   // Theme Loader and Sync Effect
@@ -305,28 +308,23 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-[var(--bg-app-color)]">
-      {/* Toast Alert Box */}
-      {toast && (
-        <div
-          className={`fixed top-4 right-4 z-50 flex items-start gap-2.5 px-4.5 py-3 rounded-2xl border text-xs shadow-2xl animate-fade-in ${
-            toast.type === 'error'
-              ? 'bg-rose-950/80 border-rose-500/20 text-rose-300'
-              : 'bg-emerald-950/80 border-emerald-500/20 text-emerald-300'
-          }`}
-        >
-          {toast.type === 'error' ? (
-            <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
-          ) : (
-            <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-          )}
-          <div>
-            <span className="font-bold block uppercase text-[9px] tracking-wider mb-0.5">
-              {toast.type === 'error' ? 'Notice Alert' : 'System Sync'}
-            </span>
-            <span>{toast.msg}</span>
-          </div>
-        </div>
-      )}
+      {/* React Toastify Container */}
+      <ToastContainer
+        position="top-right"
+        autoClose={4000}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="dark"
+        toastClassName="!bg-slate-900 !border !border-slate-800 !text-slate-200 !text-xs !rounded-2xl !shadow-2xl"
+        style={{ zIndex: 9999 }}
+      />
+
+      {/* Bill Reminder Alert popups */}
+      <BillReminderManager records={records} payments={payments} />
 
       {/* Main Application Sidebar */}
       <Sidebar 

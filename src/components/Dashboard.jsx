@@ -10,6 +10,7 @@ import {
   ShoppingBag,
   TrendingDown,
   TrendingUp,
+  Wallet,
 } from 'lucide-react';
 import { useMemo } from 'react';
 import { computeNetCashBalance } from '../utils/finance';
@@ -59,6 +60,7 @@ export default function Dashboard({ records, payments, setActiveTab }) {
     return {
       online: balanceSummary.onlineBalance,
       cash: balanceSummary.cashBalance,
+      otherCash: balanceSummary.otherCashBalance || 0,
       onlineRecords,
     };
   }, [balanceSummary, records]);
@@ -464,8 +466,8 @@ export default function Dashboard({ records, payments, setActiveTab }) {
         </div>
       </div>
 
-      {/* Extra Cards Row (Online vs Cash Payments) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Extra Cards Row (Online vs Cash vs Other Cash Payments) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="glass-panel border border-indigo-500/15 rounded-2xl p-5 flex items-center justify-between shadow-lg shadow-indigo-500/5">
           <div className="flex items-center gap-4">
             <div className="p-3.5 rounded-2xl bg-indigo-500/10 text-indigo-400">
@@ -504,6 +506,27 @@ export default function Dashboard({ records, payments, setActiveTab }) {
           <button
             onClick={() => setActiveTab('sales')}
             className="text-[11px] font-bold text-rose-400 hover:text-rose-300 py-1.5 px-3 rounded-lg bg-rose-500/5 hover:bg-rose-500/10 transition-all cursor-pointer"
+          >
+            View Details
+          </button>
+        </div>
+        <div className="glass-panel border border-emerald-500/15 rounded-2xl p-5 flex items-center justify-between shadow-lg shadow-emerald-500/5">
+          <div className="flex items-center gap-4">
+            <div className="p-3.5 rounded-2xl bg-emerald-500/10 text-emerald-400">
+              <Wallet className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                Other Cash Balance
+              </span>
+              <span className="text-xl font-bold text-white tracking-tight block mt-1">
+                ৳{paymentTotals.otherCash.toLocaleString()}
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={() => setActiveTab('sales')}
+            className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 py-1.5 px-3 rounded-lg bg-emerald-500/5 hover:bg-emerald-500/10 transition-all cursor-pointer"
           >
             View Details
           </button>

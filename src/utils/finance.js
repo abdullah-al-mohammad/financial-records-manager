@@ -36,10 +36,13 @@ export function sumMerchantPayouts(payments) {
 export function computeNetCashBalance(records, payments) {
   let onlineCollected = 0;
   let cashCollected = 0;
+  let otherCashCollected = 0;
   let onlineExpenses = 0;
   let cashExpenses = 0;
+  let otherCashExpenses = 0;
 
   records.forEach(r => {
+    // 1. Incomes
     const amount = parseFloat(r.paidByCustomer || r.salesAmount) || 0;
     const bucket = getPaymentBucket(r.digitalPaymentMethod || r.paymentSource || '');
 
@@ -49,15 +52,21 @@ export function computeNetCashBalance(records, payments) {
       cashCollected += amount;
     }
 
-    const expenseSource = r.paymentSource || r.digitalPaymentMethod || '';
-    const expenseBucket = getPaymentBucket(expenseSource);
+    // Add other cash amount separately to Other Cash collected total
+    const otherAmt = parseFloat(r.otherCashAmount) || 0;
+    otherCashCollected += otherAmt;
+
+    // 2. Expenses
+    const expenseSource = String(r.paymentSource || r.digitalPaymentMethod || '').trim().toLowerCase();
     const expenseAmount =
       (parseFloat(r.riderSalary) || 0) +
       (parseFloat(r.otherExpense) || 0) +
       (parseFloat(r.fixedExpense) || 0);
 
     if (expenseAmount > 0) {
-      if (expenseBucket === 'online') {
+      if (expenseSource === 'other cash' || expenseSource === 'other_cash') {
+        otherCashExpenses += expenseAmount;
+      } else if (getPaymentBucket(expenseSource) === 'online') {
         onlineExpenses += expenseAmount;
       } else {
         cashExpenses += expenseAmount;
@@ -67,19 +76,26 @@ export function computeNetCashBalance(records, payments) {
 
   const expenses = sumExpensesFromRecords(records);
   const merchantPayouts = sumMerchantPayouts(payments);
-  const grossCash = cashCollected;
+
+  // Other Cash Balance calculation
+  const otherCashBalance = otherCashCollected - otherCashExpenses;
+  
+  // Hand Cash Balance and Online Cash Balance
   const onlineBalance = onlineCollected - onlineExpenses;
   const cashBalance = cashCollected - cashExpenses - merchantPayouts;
-  const netRemaining = onlineBalance + cashBalance;
+  const netRemaining = onlineBalance + cashBalance + otherCashBalance;
 
   return {
-    grossCash,
+    grossCash: cashCollected,
     onlineCollected,
     cashCollected,
+    otherCashCollected,
     onlineExpenses,
     cashExpenses,
+    otherCashExpenses,
     onlineBalance,
     cashBalance,
+    otherCashBalance,
     expenses,
     merchantPayouts,
     netRemaining,

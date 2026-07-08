@@ -12,6 +12,7 @@ const OverheadExpenses = ({ form, handleChange }) => {
         >
           <option value="online">Online</option>
           <option value="cash">Cash</option>
+          <option value="other_cash">Other Cash</option>
         </select>
       </div>
       {/* Header is rendered in SalesManager */}

@@ -1,16 +1,16 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import Login from './components/Login';
-import Sidebar from './components/Sidebar';
-import Dashboard from './components/Dashboard';
-import SalesManager from './components/SalesManager';
-import ExpenseManager from './components/ExpenseManager';
-import BillingManager from './components/BillingManager';
-import HistoryManager from './components/HistoryManager';
 import AdminPanel from './components/AdminPanel';
-import { api, getCurrentSession, clearSession } from './utils/api';
+import BillingManager from './components/BillingManager';
 import BillReminderManager from './components/BillReminderManager';
+import Dashboard from './components/Dashboard';
+import ExpenseManager from './components/ExpenseManager';
+import HistoryManager from './components/HistoryManager';
+import Login from './components/Login';
+import SalesManager from './components/SalesManager';
+import Sidebar from './components/Sidebar';
+import { api, clearSession, getCurrentSession } from './utils/api';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -18,7 +18,9 @@ export default function App() {
   const [records, setRecords] = useState([]);
   const [payments, setPayments] = useState([]);
   const [merchants, setMerchants] = useState([]);
-  
+  const [transfers, setTransfers] = useState([]);
+
+
   // Edit target bridging from Expense to Sales
   const [editTarget, setEditTarget] = useState(null);
 
@@ -39,8 +41,8 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('financial_manager_theme', theme);
     const root = document.documentElement;
-    
-    const applyTheme = (t) => {
+
+    const applyTheme = t => {
       if (t === 'dark') {
         root.setAttribute('data-theme', 'dark');
         root.classList.remove('light');
@@ -53,7 +55,9 @@ export default function App() {
         root.style.colorScheme = 'light';
       } else {
         // Auto
-        const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
+          ? 'dark'
+          : 'light';
         root.setAttribute('data-theme', systemTheme);
         root.classList.remove(systemTheme === 'dark' ? 'light' : 'dark');
         root.classList.add(systemTheme);
@@ -79,19 +83,33 @@ export default function App() {
     }
   }, []);
 
+  // Auth Handlers
+  const handleLogout = useCallback(() => {
+    clearSession();
+    setCurrentUser(null);
+    setRecords([]);
+    setPayments([]);
+    setMerchants([]);
+    setTransfers([]);
+
+    setActiveTab('dashboard');
+  }, []);
+
   // Fetch Database Values
   const fetchData = useCallback(async () => {
     if (!currentUser) return;
     setLoading(true);
     try {
-      const [recordsList, paymentsList, merchantsList] = await Promise.all([
+      const [recordsList, paymentsList, merchantsList, transfersList] = await Promise.all([
         api.getAllRecords(),
         api.getAllPayments(),
-        api.getMerchants()
+        api.getMerchants(),
+        api.getAllTransfers(),
       ]);
       setRecords(recordsList);
       setPayments(paymentsList);
       setMerchants(merchantsList);
+      setTransfers(transfersList);
     } catch (err) {
       showToast(`Network Sync Error: ${err.message}`, 'error');
     } finally {
@@ -105,6 +123,15 @@ export default function App() {
     }
   }, [currentUser, fetchData]);
 
+  // Global Session Expiration Listener
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      handleLogout();
+    };
+    window.addEventListener('session-expired', handleSessionExpired);
+    return () => window.removeEventListener('session-expired', handleSessionExpired);
+  }, [handleLogout]);
+
   // Auth Handlers
   const handleLoginSuccess = () => {
     const session = getCurrentSession();
@@ -112,17 +139,10 @@ export default function App() {
     showToast('Logged in successfully!');
   };
 
-  const handleLogout = () => {
-    clearSession();
-    setCurrentUser(null);
-    setRecords([]);
-    setPayments([]);
-    setMerchants([]);
-    setActiveTab('dashboard');
-  };
+
 
   // Transaction Operations (CRUD)
-  const handleAddRecord = async (record) => {
+  const handleAddRecord = async record => {
     setLoading(true);
     try {
       const resp = await api.createRecord(record);
@@ -137,7 +157,7 @@ export default function App() {
     }
   };
 
-  const handleUpdateRecord = async (record) => {
+  const handleUpdateRecord = async record => {
     setLoading(true);
     try {
       const resp = await api.updateRecord(record);
@@ -152,7 +172,7 @@ export default function App() {
     }
   };
 
-  const handleDeleteRecord = async (id) => {
+  const handleDeleteRecord = async id => {
     setLoading(true);
     try {
       const resp = await api.deleteRecord(id);
@@ -167,20 +187,20 @@ export default function App() {
     }
   };
 
-  const handleAddMerchant = (name) => {
-  const trimmed = name?.trim();
-  if (!trimmed) return;
-  const exists = merchants.some(m => m.toLowerCase() === trimmed.toLowerCase());
-  if (exists) {
-    showToast(`Merchant "${trimmed}" already exists.`, 'error');
-    return;
-  }
-  setMerchants(prev => [...prev, trimmed].sort());
-  showToast(`Merchant "${trimmed}" added to cache.`);
-};
+  const handleAddMerchant = name => {
+    const trimmed = name?.trim();
+    if (!trimmed) return;
+    const exists = merchants.some(m => m.toLowerCase() === trimmed.toLowerCase());
+    if (exists) {
+      showToast(`Merchant "${trimmed}" already exists.`, 'error');
+      return;
+    }
+    setMerchants(prev => [...prev, trimmed].sort());
+    showToast(`Merchant "${trimmed}" added to cache.`);
+  };
 
   // Payment Operations (CRUD)
-  const handleAddPayment = async (payment) => {
+  const handleAddPayment = async payment => {
     setLoading(true);
     try {
       const resp = await api.createPayment(payment);
@@ -195,7 +215,7 @@ export default function App() {
     }
   };
 
-  const handleUpdatePayment = async (payment) => {
+  const handleUpdatePayment = async payment => {
     setLoading(true);
     try {
       const resp = await api.updatePayment(payment);
@@ -210,7 +230,7 @@ export default function App() {
     }
   };
 
-  const handleDeletePayment = async (id) => {
+  const handleDeletePayment = async id => {
     setLoading(true);
     try {
       const resp = await api.deletePayment(id);
@@ -224,6 +244,39 @@ export default function App() {
       setLoading(false);
     }
   };
+
+  // Balance Transfer Operations
+  const handleAddTransfer = async transfer => {
+    setLoading(true);
+    try {
+      const resp = await api.createTransfer(transfer);
+      if (resp.success) {
+        showToast('Transfer recorded successfully!');
+        await fetchData();
+      }
+    } catch (err) {
+      showToast(`Transfer Failed: ${err.message}`, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteTransfer = async id => {
+    setLoading(true);
+    try {
+      const resp = await api.deleteTransfer(id);
+      if (resp.success) {
+        showToast('Transfer record removed.');
+        await fetchData();
+      }
+    } catch (err) {
+      showToast(`Transfer Deletion Failed: ${err.message}`, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
 
   // Bridge navigation from Expense logs to Sales drawer edit (legacy — no longer used)
   const clearEditTarget = () => {
@@ -240,10 +293,13 @@ export default function App() {
     switch (activeTab) {
       case 'dashboard':
         return (
-          <Dashboard 
-            records={records} 
-            payments={payments} 
-            setActiveTab={setActiveTab} 
+          <Dashboard
+            records={records}
+            payments={payments}
+            transfers={transfers}
+            setActiveTab={setActiveTab}
+            onAddTransfer={handleAddTransfer}
+            onDeleteTransfer={handleDeleteTransfer}
           />
         );
       case 'sales':
@@ -285,24 +341,17 @@ export default function App() {
         );
       case 'history':
         return (
-          <HistoryManager 
-            records={records} 
-            payments={payments} 
+          <HistoryManager
+            records={records}
+            payments={payments}
+            transfers={transfers}
+            onDeleteTransfer={handleDeleteTransfer}
           />
         );
       case 'admin':
-        return (
-          <AdminPanel 
-            currentUser={currentUser} 
-            onShowToast={showToast} 
-          />
-        );
+        return <AdminPanel currentUser={currentUser} onShowToast={showToast} />;
       default:
-        return (
-          <div className="text-center py-20 text-slate-400">
-            View component not found.
-          </div>
-        );
+        return <div className="text-center py-20 text-slate-400">View component not found.</div>;
     }
   };
 
@@ -327,11 +376,11 @@ export default function App() {
       <BillReminderManager records={records} payments={payments} />
 
       {/* Main Application Sidebar */}
-      <Sidebar 
-        activeTab={activeTab} 
-        setActiveTab={setActiveTab} 
-        user={currentUser} 
-        onLogout={handleLogout} 
+      <Sidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        user={currentUser}
+        onLogout={handleLogout}
         theme={theme}
         onChangeTheme={setTheme}
       />
@@ -343,14 +392,18 @@ export default function App() {
           {loading && records.length === 0 ? (
             <div className="min-h-[50vh] flex flex-col items-center justify-center gap-3">
               <span className="w-8 h-8 border-3 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin" />
-              <span className="text-xs text-slate-500 font-bold uppercase tracking-wider animate-pulse">Syncing Database Ledger...</span>
+              <span className="text-xs text-slate-500 font-bold uppercase tracking-wider animate-pulse">
+                Syncing Database Ledger...
+              </span>
             </div>
           ) : (
             <>
               {loading && (
                 <div className="fixed bottom-4 right-4 z-50 bg-slate-900 border border-slate-800 px-3.5 py-2 rounded-xl flex items-center gap-2 shadow-lg">
                   <span className="w-3.5 h-3.5 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Syncing...</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    Syncing...
+                  </span>
                 </div>
               )}
               {renderActiveTab()}

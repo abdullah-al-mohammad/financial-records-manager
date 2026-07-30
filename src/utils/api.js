@@ -122,6 +122,8 @@ const mockDb = {
       this.set('records', DEFAULT_RECORDS);
       this.set('payments', DEFAULT_PAYMENTS);
       this.set('merchants', DEFAULT_RECHANTS);
+      this.set('transfers', []);
+      this.set('withdrawals', []);
 
       const adminHash = await hashPassword('admin123');
       const userHash = await hashPassword('user123');
@@ -248,7 +250,11 @@ function makeJsonpRequest(action, payload = {}) {
       if (response && response.success) {
         resolve(response);
       } else {
-        reject(new Error(response?.error || 'Operation failed on backend.'));
+        const errorMsg = response?.error || 'Operation failed on backend.';
+        if (errorMsg.toLowerCase().includes('unauthorized') || errorMsg.toLowerCase().includes('session invalid') || errorMsg.toLowerCase().includes('expired')) {
+          window.dispatchEvent(new CustomEvent('session-expired'));
+        }
+        reject(new Error(errorMsg));
       }
     };
 
@@ -477,6 +483,65 @@ export const api = {
       return { success: true };
     }
   },
+
+  // --- BALANCE TRANSFERS (Hand Cash ↔ Online) ---
+  async getAllTransfers() {
+    if (isLiveMode()) {
+      const resp = await makeJsonpRequest('getTransfers');
+      return resp.transfers || [];
+    } else {
+      await new Promise(r => setTimeout(r, 100));
+      return mockDb.get('transfers', []);
+    }
+  },
+
+  async createTransfer(transfer) {
+    if (isLiveMode()) {
+      return makeJsonpRequest('createTransfer', { transfer });
+    } else {
+      await new Promise(r => setTimeout(r, 150));
+      const transfers = mockDb.get('transfers', []);
+      const newTransfer = {
+        ...transfer,
+        id: 't' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+      };
+      transfers.push(newTransfer);
+      mockDb.set('transfers', transfers);
+
+      const session = getCurrentSession();
+      const typeLabel = transfer.type === 'cash_to_online' ? 'Cash → Online' : 'Online → Cash';
+      mockDb.logAudit(
+        session?.username || 'admin',
+        'Balance Transfer',
+        `ID: ${newTransfer.id}, Type: ${typeLabel}, Amount: ৳${newTransfer.amount}, Note: ${newTransfer.note || '—'}`
+      );
+      return { success: true, id: newTransfer.id };
+    }
+  },
+
+  async deleteTransfer(id) {
+    if (isLiveMode()) {
+      return makeJsonpRequest('deleteTransfer', { id });
+    } else {
+      await new Promise(r => setTimeout(r, 150));
+      const transfers = mockDb.get('transfers', []);
+      const target = transfers.find(t => t.id === id);
+      if (!target) throw new Error('Transfer not found');
+
+      const filtered = transfers.filter(t => t.id !== id);
+      mockDb.set('transfers', filtered);
+
+      const session = getCurrentSession();
+      mockDb.logAudit(
+        session?.username || 'admin',
+        'Delete Transfer',
+        `ID: ${id}, Amount: ৳${target.amount}`
+      );
+      return { success: true };
+    }
+  },
+
+
 
   // --- MERCHANT RETRIEVAL ---
   async getMerchants() {

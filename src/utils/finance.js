@@ -33,7 +33,7 @@ export function sumMerchantPayouts(payments) {
   return payments.reduce((sum, p) => sum + (parseFloat(p.paidAmount) || 0), 0);
 }
 
-export function computeNetCashBalance(records, payments) {
+export function computeNetCashBalance(records, payments, transfers = []) {
   let onlineCollected = 0;
   let cashCollected = 0;
   let otherCashCollected = 0;
@@ -42,31 +42,41 @@ export function computeNetCashBalance(records, payments) {
   let otherCashExpenses = 0;
 
   records.forEach(r => {
-    // 1. Incomes
-    const amount = parseFloat(r.paidByCustomer || r.salesAmount) || 0;
-    const bucket = getPaymentBucket(r.digitalPaymentMethod || r.paymentSource || '');
+    const customerPayment = parseFloat(r.paidByCustomer || r.salesAmount) || 0;
+    const purchaseCost = parseFloat(r.salesAmount) || 0;
 
-    if (bucket === 'online') {
-      onlineCollected += amount;
+    const rawSource = String(r.paymentSource || 'cash').toLowerCase().trim();
+    const sourceBucket = rawSource === 'online' ? 'online' : (rawSource === 'other_cash' || rawSource === 'other cash') ? 'other_cash' : 'cash';
+    const customerBucket = getPaymentBucket(r.digitalPaymentMethod || '');
+
+    // 1. Customer Payment (Income collected)
+    if (customerBucket === 'online') {
+      onlineCollected += customerPayment;
     } else {
-      cashCollected += amount;
+      cashCollected += customerPayment;
     }
 
-    // Add other cash amount separately to Other Cash collected total
-    const otherAmt = parseFloat(r.otherCashAmount) || 0;
-    otherCashCollected += otherAmt;
+    // 2. Order Purchase Cost (Money spent by business to buy the order)
+    if (sourceBucket === 'online') {
+      onlineExpenses += purchaseCost;
+    } else if (sourceBucket === 'other_cash') {
+      otherCashExpenses += purchaseCost;
+    } else {
+      cashExpenses += purchaseCost;
+    }
 
-    // 2. Expenses
-    const expenseSource = String(r.paymentSource || r.digitalPaymentMethod || '').trim().toLowerCase();
+    otherCashCollected += parseFloat(r.otherCashAmount) || 0;
+
+    // 3. Operational expenses (rider salary, variable, fixed)
     const expenseAmount =
       (parseFloat(r.riderSalary) || 0) +
       (parseFloat(r.otherExpense) || 0) +
       (parseFloat(r.fixedExpense) || 0);
 
     if (expenseAmount > 0) {
-      if (expenseSource === 'other cash' || expenseSource === 'other_cash') {
+      if (sourceBucket === 'other_cash') {
         otherCashExpenses += expenseAmount;
-      } else if (getPaymentBucket(expenseSource) === 'online') {
+      } else if (sourceBucket === 'online') {
         onlineExpenses += expenseAmount;
       } else {
         cashExpenses += expenseAmount;
@@ -77,16 +87,39 @@ export function computeNetCashBalance(records, payments) {
   const expenses = sumExpensesFromRecords(records);
   const merchantPayouts = sumMerchantPayouts(payments);
 
-  // Other Cash Balance calculation
+  // Process balance transfers (Cash ↔ Online)
+  let cashToOnline = 0;
+  let onlineToCash = 0;
+
+  transfers.forEach(t => {
+    const amt = parseFloat(t.amount) || 0;
+    if (t.type === 'online_to_cash') {
+      onlineToCash += amt;
+    } else {
+      // Default: cash_to_online
+      cashToOnline += amt;
+    }
+  });
+
   const otherCashBalance = otherCashCollected - otherCashExpenses;
-  
-  // Hand Cash Balance and Online Cash Balance
-  const onlineBalance = onlineCollected - onlineExpenses;
-  const cashBalance = cashCollected - cashExpenses - merchantPayouts;
+
+  const cashBalance =
+    cashCollected -
+    cashExpenses -
+    merchantPayouts -
+    cashToOnline +
+    onlineToCash;
+
+  const onlineBalance =
+    onlineCollected -
+    onlineExpenses +
+    cashToOnline -
+    onlineToCash;
+
   const netRemaining = onlineBalance + cashBalance + otherCashBalance;
 
   return {
-    grossCash: cashCollected,
+    grossCash: cashCollected + onlineCollected,
     onlineCollected,
     cashCollected,
     otherCashCollected,

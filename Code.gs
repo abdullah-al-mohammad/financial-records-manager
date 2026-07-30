@@ -2,6 +2,7 @@ const SHEET_NAME = 'MerchantData';
 const PAYMENTS_SHEET = 'BillPayments';
 const USERS_SHEET = 'Users';
 const AUDIT_SHEET = 'AuditLogs';
+const TRANSFERS_SHEET = 'Transfers';
 
 const SECRET_KEY = 'financial-manager-secret-2026';
 const SESSION_LIFETIME_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -29,12 +30,12 @@ const RECORD_HEADERS = [
   'fixedExpenseName',
   'fixedExpense',
   'expenseDescription',
-  'digitalPaymentMethod',
 ];
 
 const PAYMENT_HEADERS = ['id', 'date', 'merchantName', 'paidAmount', 'notes'];
 const USER_HEADERS = ['username', 'passwordHash', 'role', 'status'];
 const AUDIT_HEADERS = ['id', 'timestamp', 'username', 'action', 'details'];
+const TRANSFER_HEADERS = ['id', 'date', 'amount', 'note'];
 
 function getOrCreateSheet(name, headers) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -88,6 +89,10 @@ function getUsersSheet() {
 
 function getAuditSheet() {
   return getOrCreateSheet(AUDIT_SHEET, AUDIT_HEADERS);
+}
+
+function getTransfersSheet() {
+  return getOrCreateSheet(TRANSFERS_SHEET, TRANSFER_HEADERS);
 }
 
 // Helper: convert row array to object based on headers
@@ -217,6 +222,7 @@ function doGet(e) {
 
   const record = parseJsonParam(e.parameter.record);
   const payment = parseJsonParam(e.parameter.payment);
+  const transfer = parseJsonParam(e.parameter.transfer);
   const id = e.parameter.id;
   const token = e.parameter.sessionToken;
 
@@ -376,6 +382,44 @@ function doGet(e) {
       return jsonResponse({ success: true }, callback);
     }
 
+    // Transfer Actions
+    if (action === 'getTransfers') {
+      const sheet = getTransfersSheet();
+      const data = sheet.getDataRange().getValues();
+      const transfers =
+        data.length <= 1 ? [] : data.slice(1).map(row => rowToObject(row, TRANSFER_HEADERS));
+      return jsonResponse({ success: true, transfers }, callback);
+    }
+
+    if (action === 'createTransfer') {
+      const sheet = getTransfersSheet();
+      if (!transfer.id) transfer.id = 't' + new Date().getTime().toString();
+      sheet.appendRow(objectToRow(transfer, TRANSFER_HEADERS));
+      logAudit(
+        user,
+        'bKash Transfer',
+        `ID: ${transfer.id}, Amount: ৳${transfer.amount}, Note: ${transfer.note || '—'}`
+      );
+      return jsonResponse({ success: true, id: transfer.id }, callback);
+    }
+
+    if (action === 'deleteTransfer') {
+      const sheet = getTransfersSheet();
+      const row = findRowById(sheet, id, TRANSFER_HEADERS);
+      if (row === -1) return jsonResponse({ success: false, error: 'Transfer not found' }, callback);
+
+      const detailsRow = sheet.getRange(row, 1, 1, TRANSFER_HEADERS.length).getValues()[0];
+      const detailsObj = rowToObject(detailsRow, TRANSFER_HEADERS);
+
+      sheet.deleteRow(row);
+      logAudit(
+        user,
+        'Delete bKash Transfer',
+        `ID: ${id}, Amount: ৳${detailsObj.amount}`
+      );
+      return jsonResponse({ success: true }, callback);
+    }
+
     if (action === 'getMerchants') {
       const sheet = getSheet();
       const data = sheet.getDataRange().getValues();
@@ -517,6 +561,7 @@ function doPost(e) {
       sessionToken,
       record,
       payment,
+      transfer,
       id,
       user: userPayload,
       targetUsername,
@@ -663,6 +708,42 @@ function doPost(e) {
       return jsonResponse({ success: true });
     }
 
+    // Transfer Actions
+    if (action === 'getTransfers') {
+      const sheet = getTransfersSheet();
+      const data = sheet.getDataRange().getValues();
+      const transfers =
+        data.length <= 1 ? [] : data.slice(1).map(row => rowToObject(row, TRANSFER_HEADERS));
+      return jsonResponse({ success: true, transfers });
+    }
+
+    if (action === 'createTransfer') {
+      const sheet = getTransfersSheet();
+      if (!transfer.id) transfer.id = 't' + new Date().getTime().toString();
+      sheet.appendRow(objectToRow(transfer, TRANSFER_HEADERS));
+      logAudit(
+        user,
+        'bKash Transfer',
+        `ID: ${transfer.id}, Amount: ৳${transfer.amount}, Note: ${transfer.note || '—'}`
+      );
+      return jsonResponse({ success: true, id: transfer.id });
+    }
+
+    if (action === 'deleteTransfer') {
+      const sheet = getTransfersSheet();
+      const row = findRowById(sheet, id, TRANSFER_HEADERS);
+      if (row === -1) return jsonResponse({ success: false, error: 'Transfer not found' });
+      const detailsRow = sheet.getRange(row, 1, 1, TRANSFER_HEADERS.length).getValues()[0];
+      const detailsObj = rowToObject(detailsRow, TRANSFER_HEADERS);
+      sheet.deleteRow(row);
+      logAudit(
+        user,
+        'Delete bKash Transfer',
+        `ID: ${id}, Amount: ৳${detailsObj.amount}`
+      );
+      return jsonResponse({ success: true });
+    }
+
     // Admin Actions
     if (action === 'getUsers') {
       if (!isAdmin) return jsonResponse({ success: false, error: 'Access Denied: Admins only' });
@@ -755,7 +836,7 @@ function doPost(e) {
       return jsonResponse({ success: true, logs: logs.reverse() });
     }
 
-    return jsonResponse({ success: false, error: 'Unknown action' });
+    return jsonResponse({ success: false, error: 'Unknown action: ' + action });
   } catch (err) {
     return jsonResponse({ success: false, error: err.message });
   }

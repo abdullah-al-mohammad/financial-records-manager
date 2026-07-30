@@ -1,4 +1,13 @@
-import { Calendar, Edit2, Plus, Search, SlidersHorizontal, Trash2, X } from 'lucide-react';
+import {
+  ArrowRightLeft,
+  Calendar,
+  Edit2,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
 
@@ -17,7 +26,11 @@ const MONTHS = [
   'December',
 ];
 
-const SALES_TYPES = ['Regular', 'Parcel', 'Custom Order'];
+const SALES_TYPES = [
+  'Regular',
+  'Parcel',
+  'Custom Order',
+];
 
 const normalizePayment = value =>
   String(value || '')
@@ -75,7 +88,6 @@ const defaultForm = {
   fixedExpense: '',
   expenseDescription: '',
   paymentSource: 'cash',
-  // New field: digital payment method (bKash, Nagad, Rocket, Other)
   digitalPaymentMethod: '',
 };
 
@@ -239,7 +251,8 @@ export default function SalesManager({
     return visibleRecords.filter(r => {
       const matchSearch =
         r.merchantName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        r.riderName?.toLowerCase().includes(searchTerm.toLowerCase());
+        r.riderName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        r.salesType?.toLowerCase().includes(searchTerm.toLowerCase());
       const matchMonth = filterMonth === 'All' || r.month === filterMonth;
       const matchType = filterType === 'All' || r.salesType === filterType;
 
@@ -282,8 +295,6 @@ export default function SalesManager({
           </button>
         </div>
       </div>
-
-
 
       {/* Advanced Filters */}
       {(showFilters || searchTerm) && (
@@ -364,7 +375,9 @@ export default function SalesManager({
                   </td>
                 </tr>
               ) : (
-                filteredRecords.map(r => (
+                filteredRecords.map(r => {
+                  const isRecTransfer = r.salesType === 'Hand Cash to Online Transfer' || r.salesType === 'Online to Hand Cash Transfer';
+                  return (
                   <tr key={r.id} className="hover:bg-slate-900/20 transition-all text-slate-300">
                     <td className="p-4 whitespace-nowrap font-medium text-slate-400">
                       <span className="flex items-center gap-1.5">
@@ -379,37 +392,39 @@ export default function SalesManager({
                       </span>
                     </td>
                     <td className="p-4 whitespace-nowrap font-bold text-white">
-                      {r.merchantName || '—'}
+                      {isRecTransfer ? <span className="text-pink-400">{r.salesType}</span> : (r.merchantName || '—')}
                     </td>
                     <td className="p-4 whitespace-nowrap font-semibold text-emerald-400">
                       ৳{Number(r.salesAmount || 0).toLocaleString()}
                     </td>
                     <td className="p-4 whitespace-nowrap text-slate-400">
-                      ৳{Number(r.commissionAmount || 0).toLocaleString()}
-                      <span className="text-[10px] text-slate-600 ml-1">
-                        ({r.commissionPercent}%)
-                      </span>
+                      {isRecTransfer ? '—' : (
+                        <>
+                          ৳{Number(r.commissionAmount || 0).toLocaleString()}
+                          <span className="text-[10px] text-slate-600 ml-1">
+                            ({r.commissionPercent}%)
+                          </span>
+                        </>
+                      )}
                     </td>
                     <td className="p-4 whitespace-nowrap font-semibold text-indigo-400">
-                      ৳{Number(r.merchantBill || 0).toLocaleString()}
+                      {isRecTransfer ? '—' : `৳${Number(r.merchantBill || 0).toLocaleString()}`}
                     </td>
                     <td className="p-4 whitespace-nowrap text-slate-400">
-                      {r.discountPercent ? (
+                      {isRecTransfer || !r.discountPercent ? '—' : (
                         <>
                           ৳{Number(r.discountAmount || 0).toLocaleString()}
                           <span className="text-[10px] text-slate-600 ml-1">
                             ({r.discountPercent}%)
                           </span>
                         </>
-                      ) : (
-                        '—'
                       )}
                     </td>
                     <td className="p-4 whitespace-nowrap text-slate-400">
-                      {r.deliveryCharge ? `৳${Number(r.deliveryCharge).toLocaleString()}` : '—'}
+                      {isRecTransfer || !r.deliveryCharge ? '—' : `৳${Number(r.deliveryCharge).toLocaleString()}`}
                     </td>
-                     <td className="p-4 whitespace-nowrap text-slate-400">
-                      {r.otherCashAmount && parseFloat(r.otherCashAmount) > 0 ? (
+                    <td className="p-4 whitespace-nowrap text-slate-400">
+                      {isRecTransfer || !(r.otherCashAmount && parseFloat(r.otherCashAmount) > 0) ? '—' : (
                         <>
                           ৳{Number(r.otherCashAmount).toLocaleString()}
                           {r.otherCashSource && (
@@ -418,15 +433,14 @@ export default function SalesManager({
                             </span>
                           )}
                         </>
-                      ) : (
-                        '—'
                       )}
                     </td>
+
                     <td className="p-4 whitespace-nowrap text-slate-400">
-                      {r.digitalPaymentMethod || '—'}
+                      {isRecTransfer ? '—' : (r.digitalPaymentMethod || 'Cash')}
                     </td>
                     <td className="p-4 whitespace-nowrap font-bold text-slate-200">
-                      ৳{Number(r.paidByCustomer || 0).toLocaleString()}
+                      {isRecTransfer ? '—' : `৳${Number(r.paidByCustomer || 0).toLocaleString()}`}
                     </td>
                     <td className="p-4 whitespace-nowrap text-center">
                       <div className="flex items-center justify-center gap-1.5">
@@ -451,7 +465,7 @@ export default function SalesManager({
                       </div>
                     </td>
                   </tr>
-                ))
+                )})
               )}
             </tbody>
           </table>
@@ -525,52 +539,54 @@ export default function SalesManager({
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-medium text-slate-400 block">
-                    Merchant Name
-                  </label>
-                  <div className="flex gap-2">
-                    <select
-                      name="merchantName"
-                      value={form.merchantName}
-                      onChange={handleChange}
-                      className="flex-1 bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
-                    >
-                      <option value="">Select a merchant</option>
-                      {merchants.map(m => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => setShowAddMerchant(!showAddMerchant)}
-                      className="px-3.5 rounded-xl border border-slate-800 hover:border-slate-700 bg-slate-950 text-slate-300 text-sm cursor-pointer"
-                    >
-                      +
-                    </button>
-                  </div>
 
-                  {showAddMerchant && (
-                    <div className="flex gap-2 p-3 bg-slate-950/60 border border-slate-900 rounded-xl mt-2">
-                      <input
-                        type="text"
-                        placeholder="Enter merchant title..."
-                        value={newMerchant}
-                        onChange={e => setNewMerchant(e.target.value)}
-                        className="flex-1 bg-slate-950 border border-slate-850 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-indigo-500"
-                      />
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-medium text-slate-400 block">
+                      Merchant Name
+                    </label>
+                    <div className="flex gap-2">
+                      <select
+                        name="merchantName"
+                        value={form.merchantName}
+                        onChange={handleChange}
+                        className="flex-1 bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                      >
+                        <option value="">Select a merchant</option>
+                        {merchants.map(m => (
+                          <option key={m} value={m}>
+                            {m}
+                          </option>
+                        ))}
+                      </select>
                       <button
                         type="button"
-                        onClick={handleAddNewMerchant}
-                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold cursor-pointer"
+                        onClick={() => setShowAddMerchant(!showAddMerchant)}
+                        className="px-3.5 rounded-xl border border-slate-800 hover:border-slate-700 bg-slate-950 text-slate-300 text-sm cursor-pointer"
                       >
-                        Add
+                        +
                       </button>
                     </div>
-                  )}
-                </div>
+
+                    {showAddMerchant && (
+                      <div className="flex gap-2 p-3 bg-slate-950/60 border border-slate-900 rounded-xl mt-2">
+                        <input
+                          type="text"
+                          placeholder="Enter merchant title..."
+                          value={newMerchant}
+                          onChange={e => setNewMerchant(e.target.value)}
+                          className="flex-1 bg-slate-950 border border-slate-850 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-indigo-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddNewMerchant}
+                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold cursor-pointer"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
               </div>
 
               {/* SALES METRICS SECTION */}
@@ -610,6 +626,7 @@ export default function SalesManager({
                     </select>
                   </div>
                 </div>
+
 
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1">
@@ -687,7 +704,9 @@ export default function SalesManager({
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-[11px] font-medium text-slate-400">Other Cash Source Name</label>
+                    <label className="text-[11px] font-medium text-slate-400">
+                      Other Cash Source Name
+                    </label>
                     <input
                       type="text"
                       name="otherCashSource"
@@ -698,7 +717,9 @@ export default function SalesManager({
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[11px] font-medium text-slate-400">Other Cash Amount (৳)</label>
+                    <label className="text-[11px] font-medium text-slate-400">
+                      Other Cash Amount (৳)
+                    </label>
                     <input
                       type="number"
                       name="otherCashAmount"
@@ -711,29 +732,15 @@ export default function SalesManager({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-medium text-slate-400">Payment Source</label>
-                  <select
-                    name="paymentSource"
-                    value={form.paymentSource || 'cash'}
-                    onChange={handleChange}
-                    className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
-                  >
-                    <option value="online">Online</option>
-                    <option value="cash">Cash</option>
-                    <option value="other_cash">Other Cash</option>
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[11px] font-medium text-slate-400">Payment Method</label>
+                  <label className="text-[11px] font-medium text-slate-400">Customer Payment Method</label>
                   <select
                     name="digitalPaymentMethod"
                     value={form.digitalPaymentMethod}
                     onChange={handleChange}
                     className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
                   >
-                    <option value="">— Select Method —</option>
-                    <optgroup label="── Online Payment ──">
+                    <option value="">Cash / Physical Collection</option>
+                    <optgroup label="── Online Payment Methods ──">
                       <option value="bkash">bKash</option>
                       <option value="nagad">Nagad</option>
                       <option value="rocket">Rocket</option>
@@ -743,34 +750,69 @@ export default function SalesManager({
                       <option value="internet banking">Internet Banking</option>
                       <option value="sslcommerz">SSLCommerz</option>
                     </optgroup>
-                    <optgroup label="── Cash ──">
-                      <option value="cash">Cash</option>
-                      <option value="cash on delivery">Cash on Delivery (COD)</option>
-                    </optgroup>
                   </select>
-                  {/* Live category badge */}
-                  {form.digitalPaymentMethod && (
-                    <div
-                      className={`mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider ${
-                        getPaymentBucket(form.digitalPaymentMethod) === 'online'
-                          ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
-                          : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                      }`}
-                    >
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full ${
-                          getPaymentBucket(form.digitalPaymentMethod) === 'online'
-                            ? 'bg-indigo-400'
-                            : 'bg-amber-400'
-                        }`}
-                      />
-                      {getPaymentBucket(form.digitalPaymentMethod) === 'online'
-                        ? 'Counted as → Online Payment Total'
-                        : 'Counted as → Cash in Hand'}
-                    </div>
-                  )}
                 </div>
-                <div className="p-3 bg-slate-950 border border-slate-850 rounded-xl flex items-center justify-between">
+
+                {/* Show Order Funded By only when Online Payment is selected */}
+                {['bkash', 'nagad', 'rocket', 'upay', 'card payment', 'bank transfer', 'internet banking', 'sslcommerz', 'online'].includes(String(form.digitalPaymentMethod || '').toLowerCase()) && (
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-medium text-slate-400">
+                      Order Funded By
+                      <span className="ml-1 text-slate-500 normal-case font-normal">(where was the product purchase money spent from?)</span>
+                    </label>
+                    <select
+                      name="paymentSource"
+                      value={form.paymentSource || 'cash'}
+                      onChange={handleChange}
+                      className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                    >
+                      <option value="cash">Hand Cash (order bought using physical cash)</option>
+                      <option value="online">Online Balance (order bought using online funds)</option>
+                      <option value="other_cash">Other Cash (loan / asset sale etc.)</option>
+                    </select>
+                  </div>
+                )}
+
+                {/* Live accounting effect badge */}
+                {form.digitalPaymentMethod && (() => {
+                  const isOnlineMethod = ['bkash', 'nagad', 'rocket', 'upay', 'card payment', 'bank transfer', 'internet banking', 'sslcommerz', 'online'].includes(String(form.digitalPaymentMethod || '').toLowerCase());
+                  const source = form.paymentSource || 'cash';
+
+                  if (isOnlineMethod && source === 'cash') {
+                    return (
+                      <div className="mt-1 flex flex-col gap-1">
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                          Hand Cash DECREASES by ৳{form.salesAmount || 0} (purchase cost)
+                        </div>
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                          Online Balance INCREASES by ৳{form.paidByCustomer || 0} (customer paid)
+                        </div>
+                      </div>
+                    );
+                  }
+                  if (isOnlineMethod && source === 'online') {
+                    return (
+                      <div className="mt-1 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                        Online Balance: ৳{form.paidByCustomer || 0} added, ৳{form.salesAmount || 0} deducted
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="mt-1 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      Hand Cash: ৳{form.paidByCustomer || 0} added, ৳{form.salesAmount || 0} deducted
+                    </div>
+                  );
+                })()}
+
+
+
+
+
+                <div className="p-3 bg-slate-950 border border-slate-850 rounded-xl flex items-center justify-between mt-4">
                   <span className="text-xs font-semibold text-slate-400 flex items-center gap-1">
                     Customer Grand Total:
                     <span className="text-[10px] text-slate-600 block">
@@ -779,6 +821,7 @@ export default function SalesManager({
                   </span>
                   <span className="text-sm font-bold text-emerald-400">৳{form.paidByCustomer}</span>
                 </div>
+
               </div>
             </form>
 

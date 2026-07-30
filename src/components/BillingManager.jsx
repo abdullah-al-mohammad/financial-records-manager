@@ -66,6 +66,8 @@ export default function BillingManager({
   const [carryForward, setCarryForward] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
+
+
   // Payment Form State
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
   const [selectedMerchant, setSelectedMerchant] = useState('');

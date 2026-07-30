@@ -1,8 +1,10 @@
 import {
   Activity,
+  ArrowRightLeft,
   CreditCard,
   DollarSign,
   Landmark,
+  Minus,
   PiggyBank,
   PlusCircle,
   Printer,
@@ -11,11 +13,19 @@ import {
   TrendingDown,
   TrendingUp,
   Wallet,
+  X,
 } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { computeNetCashBalance } from '../utils/finance';
 
-export default function Dashboard({ records, payments, setActiveTab }) {
+export default function Dashboard({
+  records,
+  payments,
+  transfers = [],
+  setActiveTab,
+  onAddTransfer,
+  onDeleteTransfer,
+}) {
   const MONTHS_ORDER = [
     'January',
     'February',
@@ -31,39 +41,28 @@ export default function Dashboard({ records, payments, setActiveTab }) {
     'December',
   ];
 
+
   const balanceSummary = useMemo(
-    () => computeNetCashBalance(records, payments || []),
-    [records, payments]
+    () => computeNetCashBalance(records, payments || [], transfers || []),
+    [records, payments, transfers]
   );
 
+  // Transfer modal state
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferType, setTransferType] = useState('cash_to_online');
+  const [transferAmount, setTransferAmount] = useState('');
+  const [transferDate, setTransferDate] = useState(new Date().toISOString().slice(0, 10));
+  const [transferNote, setTransferNote] = useState('');
+  const [transferSubmitting, setTransferSubmitting] = useState(false);
+
+
   const paymentTotals = useMemo(() => {
-    const onlineMethods = [
-      'bkash',
-      'nagad',
-      'rocket',
-      'upay',
-      'sslcommerz',
-      'card',
-      'mobile banking',
-      'internet banking',
-      'bank transfer',
-      'online',
-    ];
-
-    const onlineRecords = records.filter(r => {
-      const method = String(r.digitalPaymentMethod || r.paymentMethod || '')
-        .trim()
-        .toLowerCase();
-      return onlineMethods.includes(method);
-    });
-
     return {
-      online: balanceSummary.onlineBalance,
       cash: balanceSummary.cashBalance,
+      online: balanceSummary.onlineBalance,
       otherCash: balanceSummary.otherCashBalance || 0,
-      onlineRecords,
     };
-  }, [balanceSummary, records]);
+  }, [balanceSummary]);
 
   // Aggregate stats across all records
   const stats = useMemo(() => {
@@ -74,6 +73,8 @@ export default function Dashboard({ records, payments, setActiveTab }) {
     let riderSalaries = 0;
     let otherExpenses = 0;
     let fixedExpenses = 0;
+    let merchantBills = 0;
+    let customerPaid = 0;
 
     records.forEach(r => {
       sales += parseFloat(r.salesAmount) || 0;
@@ -83,6 +84,8 @@ export default function Dashboard({ records, payments, setActiveTab }) {
       riderSalaries += parseFloat(r.riderSalary) || 0;
       otherExpenses += parseFloat(r.otherExpense) || 0;
       fixedExpenses += parseFloat(r.fixedExpense) || 0;
+      merchantBills += parseFloat(r.merchantBill) || 0;
+      customerPaid += parseFloat(r.paidByCustomer) || 0;
     });
 
     const income = commission + delivery;
@@ -125,6 +128,8 @@ export default function Dashboard({ records, payments, setActiveTab }) {
       riderSalaries,
       otherExpenses,
       fixedExpenses,
+      merchantBills,
+      customerPaid,
       merchantTotals,
     };
   }, [records, payments]);
@@ -312,529 +317,707 @@ export default function Dashboard({ records, payments, setActiveTab }) {
   }, [momData]);
 
   return (
-    <div className="space-y-8 pb-10">
-      {/* Page Title */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-            <Activity className="w-5 h-5 text-indigo-500" />
-            Financial Dashboard
-          </h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Real-time analytics and overall ledger statistics
-          </p>
-        </div>
+    <>
+      <div className="space-y-8 pb-10">
+        {/* Page Title */}
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+              <Activity className="w-5 h-5 text-indigo-500" />
+              Financial Dashboard
+            </h1>
+            <p className="text-xs text-slate-400 mt-1">
+              Real-time analytics and overall ledger statistics
+            </p>
+          </div>
 
-        {/* Quick Action Buttons */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setActiveTab('sales')}
-            className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white px-3.5 py-2 rounded-xl text-xs font-semibold shadow-md shadow-indigo-600/10 transition-all cursor-pointer"
-          >
-            <PlusCircle className="w-3.5 h-3.5" />
-            Add Record
-          </button>
-          <button
-            onClick={() => setActiveTab('billing')}
-            className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 hover:border-slate-700 active:scale-[0.98] text-slate-300 px-3.5 py-2 rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer"
-          >
-            <CreditCard className="w-3.5 h-3.5 text-slate-400" />
-            Record Payment
-          </button>
-          <button
-            onClick={() => window.print()}
-            className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-white px-3.5 py-2 rounded-xl text-xs font-semibold shadow-md transition-all cursor-pointer"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            Print Page
-          </button>
-        </div>
-      </div>
-
-      {/* Metric Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          {
-            title: 'Gross Sales Volume',
-            value: `৳${stats.sales.toLocaleString()}`,
-            icon: ShoppingBag,
-            glow: 'rgba(99, 102, 241, 0.05)',
-            accent: 'border-indigo-500/20',
-            text: 'text-indigo-400',
-            bg: 'bg-indigo-500/10',
-            subtitle: 'Total transactions registered',
-          },
-          {
-            title: 'Total Revenue (Income)',
-            value: `৳${stats.income.toLocaleString()}`,
-            icon: DollarSign,
-            glow: 'rgba(16, 185, 129, 0.05)',
-            accent: 'border-emerald-500/20',
-            text: 'text-emerald-400',
-            bg: 'bg-emerald-500/10',
-            subtitle: 'Commissions + Delivery charges',
-          },
-          {
-            title: 'Aggregate Overheads',
-            value: `৳${stats.expenses.toLocaleString()}`,
-            icon: Receipt,
-            glow: 'rgba(244, 63, 94, 0.05)',
-            accent: 'border-rose-500/20',
-            text: 'text-rose-400',
-            bg: 'bg-rose-500/10',
-            subtitle: 'Salaries, fixed & other expenses',
-          },
-          {
-            title: 'Net Profit / Loss',
-            value: `${stats.netProfit < 0 ? '-' : ''}৳${Math.abs(stats.netProfit).toLocaleString()}`,
-            icon: stats.netProfit >= 0 ? TrendingUp : TrendingDown,
-            glow: stats.netProfit >= 0 ? 'rgba(16, 185, 129, 0.05)' : 'rgba(244, 63, 94, 0.05)',
-            accent: stats.netProfit >= 0 ? 'border-emerald-500/20' : 'border-rose-500/20',
-            text: stats.netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400',
-            bg: stats.netProfit >= 0 ? 'bg-emerald-500/10' : 'bg-rose-500/10',
-            subtitle: 'Net income minus expenses',
-          },
-        ].map((c, i) => {
-          const Icon = c.icon;
-          return (
-            <div
-              key={i}
-              className={`glass-panel rounded-2xl p-5 border ${c.accent} relative overflow-hidden transition-all duration-300 hover:border-slate-700`}
-              style={{ boxShadow: `0 8px 32px 0 rgba(0, 0, 0, 0.2), 0 0 16px ${c.glow}` }}
+          {/* Quick Action Buttons */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setActiveTab('sales')}
+              className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white px-3.5 py-2 rounded-xl text-xs font-semibold shadow-md shadow-indigo-600/10 transition-all cursor-pointer"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  {c.title}
-                </span>
-                <div className={`p-2 rounded-xl ${c.bg} ${c.text}`}>
-                  <Icon className="w-4 h-4" />
+              <PlusCircle className="w-3.5 h-3.5" />
+              Add Record
+            </button>
+            <button
+              onClick={() => setActiveTab('billing')}
+              className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 hover:border-slate-700 active:scale-[0.98] text-slate-300 px-3.5 py-2 rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer"
+            >
+              <CreditCard className="w-3.5 h-3.5 text-slate-400" />
+              Record Payment
+            </button>
+            <button
+              onClick={() => setShowTransferModal(true)}
+              className="flex items-center gap-1.5 bg-violet-600/20 border border-violet-500/30 hover:bg-violet-600/30 hover:border-violet-500/60 active:scale-[0.98] text-violet-300 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+            >
+              <ArrowRightLeft className="w-3.5 h-3.5" />
+              Transfer Funds
+            </button>
+
+
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-white px-3.5 py-2 rounded-xl text-xs font-semibold shadow-md transition-all cursor-pointer"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              Print Page
+            </button>
+          </div>
+        </div>
+
+        {/* Financial Analytics Summary Table */}
+        <div className="glass-panel border border-slate-900 rounded-2xl overflow-hidden shadow-xl">
+          <div className="p-5 border-b border-slate-900">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+              System Financial Overview
+            </h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-900/60 border-b border-slate-900 text-slate-400 font-bold">
+                  <th className="p-4 whitespace-nowrap">Gross Sales</th>
+                  <th className="p-4 whitespace-nowrap">Commission</th>
+                  <th className="p-4 whitespace-nowrap">Merchant Bills</th>
+                  <th className="p-4 whitespace-nowrap">Deliv. Charges</th>
+                  <th className="p-4 whitespace-nowrap">Customer Paid</th>
+                  <th className="p-4 whitespace-nowrap">Total Expenses</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-900/40">
+                <tr className="hover:bg-slate-900/20 transition-all text-slate-300">
+                  <td className="p-4 whitespace-nowrap font-bold text-white">
+                    ৳{Math.round(stats.sales).toLocaleString()}
+                  </td>
+                  <td className="p-4 whitespace-nowrap font-bold text-indigo-400">
+                    ৳{Math.round(stats.commission).toLocaleString()}
+                  </td>
+                  <td className="p-4 whitespace-nowrap font-bold text-rose-400">
+                    ৳{Math.round(stats.merchantBills).toLocaleString()}
+                  </td>
+                  <td className="p-4 whitespace-nowrap font-bold text-cyan-400">
+                    ৳{Math.round(stats.delivery).toLocaleString()}
+                  </td>
+                  <td className="p-4 whitespace-nowrap font-bold text-emerald-300">
+                    ৳{Math.round(stats.customerPaid).toLocaleString()}
+                  </td>
+                  <td className="p-4 whitespace-nowrap font-bold text-red-400">
+                    ৳{Math.round(stats.expenses).toLocaleString()}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Metric Cards Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            {
+              title: 'Gross Sales Volume',
+              value: `৳${stats.sales.toLocaleString()}`,
+              icon: ShoppingBag,
+              glow: 'rgba(99, 102, 241, 0.05)',
+              accent: 'border-indigo-500/20',
+              text: 'text-indigo-400',
+              bg: 'bg-indigo-500/10',
+              subtitle: 'Total transactions registered',
+            },
+            {
+              title: 'Total Revenue (Income)',
+              value: `৳${stats.income.toLocaleString()}`,
+              icon: DollarSign,
+              glow: 'rgba(16, 185, 129, 0.05)',
+              accent: 'border-emerald-500/20',
+              text: 'text-emerald-400',
+              bg: 'bg-emerald-500/10',
+              subtitle: 'Commissions + Delivery charges',
+            },
+            {
+              title: 'Aggregate Overheads',
+              value: `৳${stats.expenses.toLocaleString()}`,
+              icon: Receipt,
+              glow: 'rgba(244, 63, 94, 0.05)',
+              accent: 'border-rose-500/20',
+              text: 'text-rose-400',
+              bg: 'bg-rose-500/10',
+              subtitle: 'Salaries, fixed & other expenses',
+            },
+            {
+              title: 'Net Profit / Loss',
+              value: `${stats.netProfit < 0 ? '-' : ''}৳${Math.abs(stats.netProfit).toLocaleString()}`,
+              icon: stats.netProfit >= 0 ? TrendingUp : TrendingDown,
+              glow: stats.netProfit >= 0 ? 'rgba(16, 185, 129, 0.05)' : 'rgba(244, 63, 94, 0.05)',
+              accent: stats.netProfit >= 0 ? 'border-emerald-500/20' : 'border-rose-500/20',
+              text: stats.netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400',
+              bg: stats.netProfit >= 0 ? 'bg-emerald-500/10' : 'bg-rose-500/10',
+              subtitle: 'Net income minus expenses',
+            },
+          ].map((c, i) => {
+            const Icon = c.icon;
+            return (
+              <div
+                key={i}
+                className={`glass-panel rounded-2xl p-5 border ${c.accent} relative overflow-hidden transition-all duration-300 hover:border-slate-700`}
+                style={{ boxShadow: `0 8px 32px 0 rgba(0, 0, 0, 0.2), 0 0 16px ${c.glow}` }}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    {c.title}
+                  </span>
+                  <div className={`p-2 rounded-xl ${c.bg} ${c.text}`}>
+                    <Icon className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <span className="text-2xl font-bold text-white tracking-tight">{c.value}</span>
+                  <span className="text-[10px] text-slate-500 block mt-1">{c.subtitle}</span>
                 </div>
               </div>
-              <div className="mt-4">
-                <span className="text-2xl font-bold text-white tracking-tight">{c.value}</span>
-                <span className="text-[10px] text-slate-500 block mt-1">{c.subtitle}</span>
+            );
+          })}
+        </div>
+
+        {/* Extra Cards Row (Dues and Other Cash) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="glass-panel border border-rose-500/15 rounded-2xl p-5 flex items-center justify-between shadow-lg shadow-rose-500/5">
+            <div className="flex items-center gap-4">
+              <div className="p-3.5 rounded-2xl bg-rose-500/10 text-rose-400">
+                <Landmark className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Merchant Unpaid Bills
+                </span>
+                <span className="text-xl font-bold text-white tracking-tight block mt-1">
+                  ৳{stats.totalDues.toLocaleString()}
+                </span>
               </div>
             </div>
-          );
-        })}
-      </div>
-
-      {/* Extra Cards Row (Dues and Other Cash) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="glass-panel border border-rose-500/15 rounded-2xl p-5 flex items-center justify-between shadow-lg shadow-rose-500/5">
-          <div className="flex items-center gap-4">
-            <div className="p-3.5 rounded-2xl bg-rose-500/10 text-rose-400">
-              <Landmark className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                Merchant Unpaid Bills
-              </span>
-              <span className="text-xl font-bold text-white tracking-tight block mt-1">
-                ৳{stats.totalDues.toLocaleString()}
-              </span>
-            </div>
+            <button
+              onClick={() => setActiveTab('billing')}
+              className="text-[11px] font-bold text-rose-400 hover:text-rose-300 py-1.5 px-3 rounded-lg bg-rose-500/5 hover:bg-rose-500/10 transition-all cursor-pointer"
+            >
+              Clear Dues
+            </button>
           </div>
-          <button
-            onClick={() => setActiveTab('billing')}
-            className="text-[11px] font-bold text-rose-400 hover:text-rose-300 py-1.5 px-3 rounded-lg bg-rose-500/5 hover:bg-rose-500/10 transition-all cursor-pointer"
-          >
-            Clear Dues
-          </button>
-        </div>
 
-        <div className="glass-panel border border-indigo-500/15 rounded-2xl p-5 flex items-center justify-between shadow-lg shadow-indigo-500/5">
-          <div className="flex items-center gap-4">
-            <div className="p-3.5 rounded-2xl bg-indigo-500/10 text-indigo-400">
-              <PiggyBank className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                Other Cash Collected
-              </span>
-              <span className="text-xl font-bold text-white tracking-tight block mt-1">
-                ৳{stats.otherCash.toLocaleString()}
-              </span>
-            </div>
-          </div>
-          <button
-            onClick={() => setActiveTab('sales')}
-            className="text-[11px] font-bold text-indigo-400 hover:text-indigo-300 py-1.5 px-3 rounded-lg bg-indigo-500/5 hover:bg-indigo-500/10 transition-all cursor-pointer"
-          >
-            View Cash sources
-          </button>
-        </div>
-      </div>
-
-      {/* Extra Cards Row (Online vs Cash vs Other Cash Payments) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="glass-panel border border-indigo-500/15 rounded-2xl p-5 flex items-center justify-between shadow-lg shadow-indigo-500/5">
-          <div className="flex items-center gap-4">
-            <div className="p-3.5 rounded-2xl bg-indigo-500/10 text-indigo-400">
-              <CreditCard className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                Online Balance ({paymentTotals.onlineRecords.length})
-              </span>
-              <span className="text-xl font-bold text-white tracking-tight block mt-1">
-                ৳{paymentTotals.online.toLocaleString()}
-              </span>
-            </div>
-          </div>
-          <button
-            onClick={() => setActiveTab('sales')}
-            className="text-[11px] font-bold text-indigo-400 hover:text-indigo-300 py-1.5 px-3 rounded-lg bg-indigo-500/5 hover:bg-indigo-500/10 transition-all cursor-pointer"
-          >
-            View Details
-          </button>
-        </div>
-        <div className="glass-panel border border-rose-500/15 rounded-2xl p-5 flex items-center justify-between shadow-lg shadow-rose-500/5">
-          <div className="flex items-center gap-4">
-            <div className="p-3.5 rounded-2xl bg-rose-500/10 text-rose-400">
-              <PiggyBank className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                Cash in Hand Balance
-              </span>
-              <span className="text-xl font-bold text-white tracking-tight block mt-1">
-                ৳{paymentTotals.cash.toLocaleString()}
-              </span>
-            </div>
-          </div>
-          <button
-            onClick={() => setActiveTab('sales')}
-            className="text-[11px] font-bold text-rose-400 hover:text-rose-300 py-1.5 px-3 rounded-lg bg-rose-500/5 hover:bg-rose-500/10 transition-all cursor-pointer"
-          >
-            View Details
-          </button>
-        </div>
-        <div className="glass-panel border border-emerald-500/15 rounded-2xl p-5 flex items-center justify-between shadow-lg shadow-emerald-500/5">
-          <div className="flex items-center gap-4">
-            <div className="p-3.5 rounded-2xl bg-emerald-500/10 text-emerald-400">
-              <Wallet className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                Other Cash Balance
-              </span>
-              <span className="text-xl font-bold text-white tracking-tight block mt-1">
-                ৳{paymentTotals.otherCash.toLocaleString()}
-              </span>
-            </div>
-          </div>
-          <button
-            onClick={() => setActiveTab('sales')}
-            className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 py-1.5 px-3 rounded-lg bg-emerald-500/5 hover:bg-emerald-500/10 transition-all cursor-pointer"
-          >
-            View Details
-          </button>
-        </div>
-      </div>
-
-      {/* SVG Charts Panel */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Month-over-Month Column Chart */}
-        <div className="lg:col-span-2 glass-panel border border-slate-900 rounded-2xl p-5">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-6">
-            Sales vs Expenses MoM Volume
-          </h3>
-          {momData.length === 0 ? (
-            <div className="h-64 flex items-center justify-center text-xs text-slate-500">
-              No historical data available. Create records to view chart.
-            </div>
-          ) : (
-            <div className="w-full overflow-hidden">
-              <svg className="w-full h-64" viewBox="0 0 500 240">
-                {/* Horizontal grid lines */}
-                {[0, 0.25, 0.5, 0.75, 1].map((p, idx) => {
-                  const y = 20 + p * 160;
-                  const val = Math.round(maxMoMVal * (1 - p));
-                  return (
-                    <g key={idx} className="opacity-30">
-                      <line
-                        x1="45"
-                        y1={y}
-                        x2="480"
-                        y2={y}
-                        stroke="#334155"
-                        strokeWidth="0.5"
-                        strokeDasharray="3 3"
-                      />
-                      <text
-                        x="35"
-                        y={y + 4}
-                        textAnchor="end"
-                        fill="#94a3b8"
-                        fontSize="9"
-                        fontWeight="500"
-                      >
-                        {val >= 1000 ? `${(val / 1000).toFixed(0)}k` : val}
-                      </text>
-                    </g>
-                  );
-                })}
-
-                {/* Draw Columns */}
-                {momData.map((d, idx) => {
-                  const step = 430 / momData.length;
-                  const xBase = 55 + idx * step;
-
-                  const salesHeight = (d.sales / maxMoMVal) * 160;
-                  const salesY = 180 - salesHeight;
-
-                  const expensesHeight = (d.expenses / maxMoMVal) * 160;
-                  const expensesY = 180 - expensesHeight;
-
-                  return (
-                    <g key={idx}>
-                      {/* Sales Column (Indigo) */}
-                      <rect
-                        x={xBase + 10}
-                        y={salesY}
-                        width="18"
-                        height={Math.max(salesHeight, 2)}
-                        rx="3"
-                        fill="url(#indigoGrad)"
-                        className="transition-all duration-300 hover:opacity-90"
-                      />
-                      {/* Expenses Column (Rose) */}
-                      <rect
-                        x={xBase + 32}
-                        y={expensesY}
-                        width="18"
-                        height={Math.max(expensesHeight, 2)}
-                        rx="3"
-                        fill="url(#roseGrad)"
-                        className="transition-all duration-300 hover:opacity-90"
-                      />
-                      {/* X Label */}
-                      <text
-                        x={xBase + 30}
-                        y="205"
-                        textAnchor="middle"
-                        fill="#94a3b8"
-                        fontSize="9"
-                        fontWeight="600"
-                      >
-                        {d.month}
-                      </text>
-                    </g>
-                  );
-                })}
-
-                {/* Legend */}
-                <g transform="translate(180, 225)" fontSize="9" fontWeight="600">
-                  <circle cx="10" cy="5" r="4" fill="#6366f1" />
-                  <text x="20" y="8" fill="#94a3b8">
-                    Sales Volume
-                  </text>
-
-                  <circle cx="95" cy="5" r="4" fill="#f43f5e" />
-                  <text x="105" y="8" fill="#94a3b8">
-                    Expenses
-                  </text>
-                </g>
-
-                {/* SVG Gradients */}
-                <defs>
-                  <linearGradient id="indigoGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#8b5cf6" />
-                    <stop offset="100%" stopColor="#4f46e5" />
-                  </linearGradient>
-                  <linearGradient id="roseGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#f43f5e" />
-                    <stop offset="100%" stopColor="#e11d48" />
-                  </linearGradient>
-                </defs>
-              </svg>
-            </div>
-          )}
-        </div>
-
-        {/* Expense breakdown chart (Donut) */}
-        <div className="glass-panel border border-slate-900 rounded-2xl p-5">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-6">
-            Expense Distribution
-          </h3>
-          {expensePieData.length === 0 ? (
-            <div className="h-64 flex items-center justify-center text-xs text-slate-500">
-              No expenses recorded yet.
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center">
-              <svg className="w-40 h-40" viewBox="0 0 160 160">
-                {renderDonutPaths()}
-                <circle cx="80" cy="80" r="46" fill="#0b101e" />
-                <text
-                  x="80"
-                  y="77"
-                  textAnchor="middle"
-                  fill="#94a3b8"
-                  fontSize="8"
-                  fontWeight="bold"
-                >
-                  TOTAL
-                </text>
-                <text
-                  x="80"
-                  y="93"
-                  textAnchor="middle"
-                  fill="#ffffff"
-                  fontSize="11"
-                  fontWeight="bold"
-                >
-                  ৳
-                  {(
-                    stats.riderSalaries +
-                    stats.fixedExpenses +
-                    stats.otherExpenses
-                  ).toLocaleString()}
-                </text>
-              </svg>
-
-              <div className="mt-6 w-full space-y-2 text-xs">
-                {expensePieData.map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="w-2.5 h-2.5 rounded-full"
-                        style={{ backgroundColor: item.color }}
-                      />
-                      <span className="text-slate-400 font-medium">{item.name}</span>
-                    </div>
-                    <span className="font-bold text-white">
-                      ৳{item.value.toLocaleString()} ({item.percentage.toFixed(0)}%)
-                    </span>
-                  </div>
-                ))}
+          <div className="glass-panel border border-indigo-500/15 rounded-2xl p-5 flex items-center justify-between shadow-lg shadow-indigo-500/5">
+            <div className="flex items-center gap-4">
+              <div className="p-3.5 rounded-2xl bg-indigo-500/10 text-indigo-400">
+                <PiggyBank className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Other Cash Collected
+                </span>
+                <span className="text-xl font-bold text-white tracking-tight block mt-1">
+                  ৳{stats.otherCash.toLocaleString()}
+                </span>
               </div>
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Leaderboards and summaries */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Top Merchants Leaderboard */}
-        <div className="glass-panel border border-slate-900 rounded-2xl p-5">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">
-            Top Merchants by Volume
-          </h3>
-          {topMerchants.length === 0 ? (
-            <div className="py-6 text-center text-xs text-slate-500">
-              No merchants registered yet.
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {topMerchants.map((m, idx) => {
-                const percentage = stats.sales > 0 ? (m.sales / stats.sales) * 100 : 0;
-                return (
-                  <div key={m.name} className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-500">#{idx + 1}</span>
-                        <span className="font-semibold text-slate-200">{m.name}</span>
-                      </div>
-                      <span className="font-bold text-indigo-400">৳{m.sales.toLocaleString()}</span>
-                    </div>
-                    <div className="h-1.5 w-full bg-slate-900 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-linear-to-r from-indigo-500 to-violet-600 rounded-full"
-                        style={{ width: `${percentage}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+            <button
+              onClick={() => setActiveTab('sales')}
+              className="text-[11px] font-bold text-indigo-400 hover:text-indigo-300 py-1.5 px-3 rounded-lg bg-indigo-500/5 hover:bg-indigo-500/10 transition-all cursor-pointer"
+            >
+              View Cash sources
+            </button>
+          </div>
         </div>
 
-        {/* Previous Month Outstanding Dues */}
-        <div className="glass-panel border border-slate-900 rounded-2xl p-5 flex flex-col justify-between">
-          <div>
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4 flex items-center justify-between">
-              <span>Prior Month Dues</span>
-              <span className="text-[10px] text-rose-400 font-bold bg-rose-500/10 px-2 py-0.5 rounded-lg border border-rose-500/20 uppercase tracking-widest">
-                Due
-              </span>
+        {/* Extra Cards Row (Cash vs Other Cash Payments) */}
+        {/* Extra Cards Row (Cash vs Online vs Other Cash Payments) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="glass-panel border border-amber-500/15 rounded-2xl p-5 flex items-center justify-between shadow-lg shadow-amber-500/5">
+            <div className="flex items-center gap-4">
+              <div className="p-3.5 rounded-2xl bg-amber-500/10 text-amber-400">
+                <PiggyBank className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Hand Cash Balance
+                </span>
+                <span className="text-xl font-bold text-white tracking-tight block mt-1">
+                  ৳{paymentTotals.cash.toLocaleString()}
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={() => setActiveTab('sales')}
+              className="text-[11px] font-bold text-amber-400 hover:text-amber-300 py-1.5 px-3 rounded-lg bg-amber-500/5 hover:bg-amber-500/10 transition-all cursor-pointer"
+            >
+              View Details
+            </button>
+          </div>
+
+          <div className="glass-panel border border-violet-500/15 rounded-2xl p-5 flex items-center justify-between shadow-lg shadow-violet-500/5">
+            <div className="flex items-center gap-4">
+              <div className="p-3.5 rounded-2xl bg-violet-500/10 text-violet-400">
+                <CreditCard className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Online Cash Balance
+                </span>
+                <span className="text-xl font-bold text-white tracking-tight block mt-1">
+                  ৳{paymentTotals.online.toLocaleString()}
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={() => setActiveTab('sales')}
+              className="text-[11px] font-bold text-violet-400 hover:text-violet-300 py-1.5 px-3 rounded-lg bg-violet-500/5 hover:bg-violet-500/10 transition-all cursor-pointer"
+            >
+              View Details
+            </button>
+          </div>
+
+          <div className="glass-panel border border-emerald-500/15 rounded-2xl p-5 flex items-center justify-between shadow-lg shadow-emerald-500/5">
+            <div className="flex items-center gap-4">
+              <div className="p-3.5 rounded-2xl bg-emerald-500/10 text-emerald-400">
+                <Wallet className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Other Cash Balance
+                </span>
+                <span className="text-xl font-bold text-white tracking-tight block mt-1">
+                  ৳{paymentTotals.otherCash.toLocaleString()}
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={() => setActiveTab('sales')}
+              className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 py-1.5 px-3 rounded-lg bg-emerald-500/5 hover:bg-emerald-500/10 transition-all cursor-pointer"
+            >
+              View Details
+            </button>
+          </div>
+        </div>
+
+        {/* SVG Charts Panel */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Month-over-Month Column Chart */}
+          <div className="lg:col-span-2 glass-panel border border-slate-900 rounded-2xl p-5">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-6">
+              Sales vs Expenses MoM Volume
             </h3>
-            {previousMonthDues.length === 0 ? (
-              <div className="py-8 text-center text-xs text-slate-500">
-                All previous dues settled.
+            {momData.length === 0 ? (
+              <div className="h-64 flex items-center justify-center text-xs text-slate-500">
+                No historical data available. Create records to view chart.
               </div>
             ) : (
-              <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
-                {previousMonthDues.map(m => (
-                  <div
-                    key={m.name}
-                    className="flex justify-between items-center text-xs py-1.5 border-b border-slate-900/60 last:border-b-0"
-                  >
-                    <span className="font-semibold text-slate-200">{m.name}</span>
-                    <span className="font-bold text-rose-400">৳{m.due.toLocaleString()}</span>
-                  </div>
-                ))}
+              <div className="w-full overflow-hidden">
+                <svg className="w-full h-64" viewBox="0 0 500 240">
+                  {/* Horizontal grid lines */}
+                  {[0, 0.25, 0.5, 0.75, 1].map((p, idx) => {
+                    const y = 20 + p * 160;
+                    const val = Math.round(maxMoMVal * (1 - p));
+                    return (
+                      <g key={idx} className="opacity-30">
+                        <line
+                          x1="45"
+                          y1={y}
+                          x2="480"
+                          y2={y}
+                          stroke="#334155"
+                          strokeWidth="0.5"
+                          strokeDasharray="3 3"
+                        />
+                        <text
+                          x="35"
+                          y={y + 4}
+                          textAnchor="end"
+                          fill="#94a3b8"
+                          fontSize="9"
+                          fontWeight="500"
+                        >
+                          {val >= 1000 ? `${(val / 1000).toFixed(0)}k` : val}
+                        </text>
+                      </g>
+                    );
+                  })}
+
+                  {/* Draw Columns */}
+                  {momData.map((d, idx) => {
+                    const step = 430 / momData.length;
+                    const xBase = 55 + idx * step;
+
+                    const salesHeight = (d.sales / maxMoMVal) * 160;
+                    const salesY = 180 - salesHeight;
+
+                    const expensesHeight = (d.expenses / maxMoMVal) * 160;
+                    const expensesY = 180 - expensesHeight;
+
+                    return (
+                      <g key={idx}>
+                        {/* Sales Column (Indigo) */}
+                        <rect
+                          x={xBase + 10}
+                          y={salesY}
+                          width="18"
+                          height={Math.max(salesHeight, 2)}
+                          rx="3"
+                          fill="url(#indigoGrad)"
+                          className="transition-all duration-300 hover:opacity-90"
+                        />
+                        {/* Expenses Column (Rose) */}
+                        <rect
+                          x={xBase + 32}
+                          y={expensesY}
+                          width="18"
+                          height={Math.max(expensesHeight, 2)}
+                          rx="3"
+                          fill="url(#roseGrad)"
+                          className="transition-all duration-300 hover:opacity-90"
+                        />
+                        {/* X Label */}
+                        <text
+                          x={xBase + 30}
+                          y="205"
+                          textAnchor="middle"
+                          fill="#94a3b8"
+                          fontSize="9"
+                          fontWeight="600"
+                        >
+                          {d.month}
+                        </text>
+                      </g>
+                    );
+                  })}
+
+                  {/* Legend */}
+                  <g transform="translate(180, 225)" fontSize="9" fontWeight="600">
+                    <circle cx="10" cy="5" r="4" fill="#6366f1" />
+                    <text x="20" y="8" fill="#94a3b8">
+                      Sales Volume
+                    </text>
+
+                    <circle cx="95" cy="5" r="4" fill="#f43f5e" />
+                    <text x="105" y="8" fill="#94a3b8">
+                      Expenses
+                    </text>
+                  </g>
+
+                  {/* SVG Gradients */}
+                  <defs>
+                    <linearGradient id="indigoGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#8b5cf6" />
+                      <stop offset="100%" stopColor="#4f46e5" />
+                    </linearGradient>
+                    <linearGradient id="roseGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#f43f5e" />
+                      <stop offset="100%" stopColor="#e11d48" />
+                    </linearGradient>
+                  </defs>
+                </svg>
               </div>
             )}
           </div>
-          <div className="pt-3 border-t border-slate-900 mt-4 flex items-center justify-between">
-            <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider block">
-              Total Outstanding Prior
-            </span>
-            <span className="text-sm font-extrabold text-rose-400 block">
-              ৳{previousMonthDues.reduce((sum, m) => sum + m.due, 0).toLocaleString()}
-            </span>
+
+          {/* Expense breakdown chart (Donut) */}
+          <div className="glass-panel border border-slate-900 rounded-2xl p-5">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-6">
+              Expense Distribution
+            </h3>
+            {expensePieData.length === 0 ? (
+              <div className="h-64 flex items-center justify-center text-xs text-slate-500">
+                No expenses recorded yet.
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center">
+                <svg className="w-40 h-40" viewBox="0 0 160 160">
+                  {renderDonutPaths()}
+                  <circle cx="80" cy="80" r="46" fill="#0b101e" />
+                  <text
+                    x="80"
+                    y="77"
+                    textAnchor="middle"
+                    fill="#94a3b8"
+                    fontSize="8"
+                    fontWeight="bold"
+                  >
+                    TOTAL
+                  </text>
+                  <text
+                    x="80"
+                    y="93"
+                    textAnchor="middle"
+                    fill="#ffffff"
+                    fontSize="11"
+                    fontWeight="bold"
+                  >
+                    ৳
+                    {(
+                      stats.riderSalaries +
+                      stats.fixedExpenses +
+                      stats.otherExpenses
+                    ).toLocaleString()}
+                  </text>
+                </svg>
+
+                <div className="mt-6 w-full space-y-2 text-xs">
+                  {expensePieData.map((item, idx) => (
+                    <div key={idx} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="w-2.5 h-2.5 rounded-full"
+                          style={{ backgroundColor: item.color }}
+                        />
+                        <span className="text-slate-400 font-medium">{item.name}</span>
+                      </div>
+                      <span className="font-bold text-white">
+                        ৳{item.value.toLocaleString()} ({item.percentage.toFixed(0)}%)
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Latest Audit / System Logs preview */}
-        <div className="glass-panel border border-slate-900 rounded-2xl p-5">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">
-            Recent Records Added
-          </h3>
-          {records.length === 0 ? (
-            <div className="py-6 text-center text-xs text-slate-500">No recent entries found.</div>
-          ) : (
-            <div className="divide-y divide-slate-900/60 max-h-48 overflow-y-auto pr-1">
-              {records
-                .slice(-4)
-                .reverse()
-                .map((r, i) => (
-                  <div
-                    key={r.id || i}
-                    className="py-2.5 flex items-center justify-between text-xs first:pt-0 last:pb-0"
-                  >
-                    <div>
-                      <span className="font-bold text-slate-200 block">
-                        {r.merchantName || 'Generic Transaction'}
-                      </span>
-                      <span className="text-[10px] text-slate-500">
-                        {new Date(r.date).toLocaleString([], {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}{' '}
-                        — {r.salesType}
-                      </span>
+        {/* Leaderboards and summaries */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Top Merchants Leaderboard */}
+          <div className="glass-panel border border-slate-900 rounded-2xl p-5">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">
+              Top Merchants by Volume
+            </h3>
+            {topMerchants.length === 0 ? (
+              <div className="py-6 text-center text-xs text-slate-500">
+                No merchants registered yet.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {topMerchants.map((m, idx) => {
+                  const percentage = stats.sales > 0 ? (m.sales / stats.sales) * 100 : 0;
+                  return (
+                    <div key={m.name} className="space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-500">#{idx + 1}</span>
+                          <span className="font-semibold text-slate-200">{m.name}</span>
+                        </div>
+                        <span className="font-bold text-indigo-400">
+                          ৳{m.sales.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="h-1.5 w-full bg-slate-900 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-linear-to-r from-indigo-500 to-violet-600 rounded-full"
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <span className="font-bold text-emerald-400 block">
-                        ৳{Number(r.salesAmount || 0).toLocaleString()}
-                      </span>
-                      <span className="text-[10px] text-slate-500">
-                        Com. ৳{Number(r.commissionAmount || 0).toLocaleString()}
-                      </span>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Previous Month Outstanding Dues */}
+          <div className="glass-panel border border-slate-900 rounded-2xl p-5 flex flex-col justify-between">
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4 flex items-center justify-between">
+                <span>Prior Month Dues</span>
+                <span className="text-[10px] text-rose-400 font-bold bg-rose-500/10 px-2 py-0.5 rounded-lg border border-rose-500/20 uppercase tracking-widest">
+                  Due
+                </span>
+              </h3>
+              {previousMonthDues.length === 0 ? (
+                <div className="py-8 text-center text-xs text-slate-500">
+                  All previous dues settled.
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
+                  {previousMonthDues.map(m => (
+                    <div
+                      key={m.name}
+                      className="flex justify-between items-center text-xs py-1.5 border-b border-slate-900/60 last:border-b-0"
+                    >
+                      <span className="font-semibold text-slate-200">{m.name}</span>
+                      <span className="font-bold text-rose-400">৳{m.due.toLocaleString()}</span>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+              )}
             </div>
-          )}
+            <div className="pt-3 border-t border-slate-900 mt-4 flex items-center justify-between">
+              <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider block">
+                Total Outstanding Prior
+              </span>
+              <span className="text-sm font-extrabold text-rose-400 block">
+                ৳{previousMonthDues.reduce((sum, m) => sum + m.due, 0).toLocaleString()}
+              </span>
+            </div>
+          </div>
+
+          {/* Latest Audit / System Logs preview */}
+          <div className="glass-panel border border-slate-900 rounded-2xl p-5">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">
+              Recent Records Added
+            </h3>
+            {records.length === 0 ? (
+              <div className="py-6 text-center text-xs text-slate-500">
+                No recent entries found.
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-900/60 max-h-48 overflow-y-auto pr-1">
+                {records
+                  .slice(-4)
+                  .reverse()
+                  .map((r, i) => (
+                    <div
+                      key={r.id || i}
+                      className="py-2.5 flex items-center justify-between text-xs first:pt-0 last:pb-0"
+                    >
+                      <div>
+                        <span className="font-bold text-slate-200 block">
+                          {r.merchantName || 'Generic Transaction'}
+                        </span>
+                        <span className="text-[10px] text-slate-500">
+                          {new Date(r.date).toLocaleString([], {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}{' '}
+                          — {r.salesType}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="font-bold text-emerald-400 block">
+                          ৳{Number(r.salesAmount || 0).toLocaleString()}
+                        </span>
+                        <span className="text-[10px] text-slate-500">
+                          Com. ৳{Number(r.commissionAmount || 0).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+
+
+
+
+      {/* ── Transfer Funds Modal ── */}
+      {showTransferModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)' }}>
+          <div className="bg-slate-950 border border-slate-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-5 relative">
+            <button onClick={() => setShowTransferModal(false)} className="absolute top-4 right-4 text-slate-500 hover:text-slate-200 transition-colors cursor-pointer">
+              <X className="w-4 h-4" />
+            </button>
+
+            <div>
+              <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                <ArrowRightLeft className="w-4 h-4 text-violet-400" />
+                Transfer Funds
+              </h2>
+              <p className="text-[11px] text-slate-500 mt-0.5">Move money between Hand Cash and Online Cash Balance</p>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-[11px] font-semibold text-slate-400 block mb-1">Transfer Direction</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setTransferType('cash_to_online')}
+                    className={`py-2.5 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                      transferType === 'cash_to_online'
+                        ? 'bg-violet-600/20 border-violet-500/60 text-violet-300'
+                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    Hand Cash → Online
+                  </button>
+                  <button
+                    onClick={() => setTransferType('online_to_cash')}
+                    className={`py-2.5 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                      transferType === 'online_to_cash'
+                        ? 'bg-violet-600/20 border-violet-500/60 text-violet-300'
+                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    Online → Hand Cash
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-400 block mb-1">Amount (৳)</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={transferAmount}
+                  onChange={e => setTransferAmount(e.target.value)}
+                  placeholder="e.g. 5000"
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-violet-500 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-400 block mb-1">Date</label>
+                <input
+                  type="date"
+                  value={transferDate}
+                  onChange={e => setTransferDate(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-violet-500 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-400 block mb-1">Note (optional)</label>
+                <input
+                  type="text"
+                  value={transferNote}
+                  onChange={e => setTransferNote(e.target.value)}
+                  placeholder="e.g. Moved for bill payment"
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-violet-500 transition-colors"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() => setShowTransferModal(false)}
+                className="px-4 py-2 border border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-900 rounded-xl text-xs font-semibold cursor-pointer transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (!transferAmount || parseFloat(transferAmount) <= 0) return;
+                  setTransferSubmitting(true);
+                  try {
+                    await onAddTransfer({
+                      type: transferType,
+                      amount: String(parseFloat(transferAmount)),
+                      date: transferDate,
+                      note: transferNote,
+                    });
+                    setTransferAmount('');
+                    setTransferNote('');
+                    setShowTransferModal(false);
+                  } finally {
+                    setTransferSubmitting(false);
+                  }
+                }}
+                disabled={transferSubmitting || !transferAmount || parseFloat(transferAmount) <= 0}
+                className="px-5 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-xs font-semibold cursor-pointer transition-all"
+              >
+                {transferSubmitting ? 'Saving…' : 'Confirm Transfer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

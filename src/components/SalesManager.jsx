@@ -1,13 +1,7 @@
-import {
-  Calendar,
-  Edit2,
-  Plus,
-  Search,
-  SlidersHorizontal,
-  Trash2,
-  X
-} from 'lucide-react';
+import { Calendar, Edit2, Plus, Search, SlidersHorizontal, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import DatePicker from 'react-datepicker';
+import { format } from 'date-fns';
 import { toast } from 'react-toastify';
 
 const MONTHS = [
@@ -25,11 +19,7 @@ const MONTHS = [
   'December',
 ];
 
-const SALES_TYPES = [
-  'Regular',
-  'Parcel',
-  'Custom Order',
-];
+const SALES_TYPES = ['Regular', 'Parcel', 'Custom Order'];
 
 const normalizePayment = value =>
   String(value || '')
@@ -212,7 +202,6 @@ export default function SalesManager({
       if (editingId) {
         await onUpdateRecord(payload);
       } else {
-        // console.log('Submitting:', payload);
         await onAddRecord(payload);
       }
     } finally {
@@ -256,8 +245,6 @@ export default function SalesManager({
       return matchSearch && matchMonth && matchType;
     });
   }, [visibleRecords, searchTerm, filterMonth, filterType]);
-
-
 
   return (
     <div className="space-y-6">
@@ -373,96 +360,112 @@ export default function SalesManager({
                 </tr>
               ) : (
                 filteredRecords.map(r => {
-                  const isRecTransfer = r.salesType === 'Hand Cash to Online Transfer' || r.salesType === 'Online to Hand Cash Transfer';
+                  const isRecTransfer =
+                    r.salesType === 'Hand Cash to Online Transfer' ||
+                    r.salesType === 'Online to Hand Cash Transfer';
                   return (
-                  <tr key={r.id} className="hover:bg-slate-900/20 transition-all text-slate-300">
-                    <td className="p-4 whitespace-nowrap font-medium text-slate-400">
-                      <span className="flex items-center gap-1.5">
-                        <Calendar className="w-3.5 h-3.5 text-slate-600" />
-                        {new Date(r.date).toLocaleString([], {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </span>
-                    </td>
-                    <td className="p-4 whitespace-nowrap font-bold text-white">
-                      {isRecTransfer ? <span className="text-pink-400">{r.salesType}</span> : (r.merchantName || '—')}
-                    </td>
-                    <td className="p-4 whitespace-nowrap font-semibold text-emerald-400">
-                      ৳{Number(r.salesAmount || 0).toLocaleString()}
-                    </td>
-                    <td className="p-4 whitespace-nowrap text-slate-400">
-                      {isRecTransfer ? '—' : (
-                        <>
-                          ৳{Number(r.commissionAmount || 0).toLocaleString()}
-                          <span className="text-[10px] text-slate-600 ml-1">
-                            ({r.commissionPercent}%)
-                          </span>
-                        </>
-                      )}
-                    </td>
-                    <td className="p-4 whitespace-nowrap font-semibold text-indigo-400">
-                      {isRecTransfer ? '—' : `৳${Number(r.merchantBill || 0).toLocaleString()}`}
-                    </td>
-                    <td className="p-4 whitespace-nowrap text-slate-400">
-                      {isRecTransfer || !r.discountPercent ? '—' : (
-                        <>
-                          ৳{Number(r.discountAmount || 0).toLocaleString()}
-                          <span className="text-[10px] text-slate-600 ml-1">
-                            ({r.discountPercent}%)
-                          </span>
-                        </>
-                      )}
-                    </td>
-                    <td className="p-4 whitespace-nowrap text-slate-400">
-                      {isRecTransfer || !r.deliveryCharge ? '—' : `৳${Number(r.deliveryCharge).toLocaleString()}`}
-                    </td>
-                    <td className="p-4 whitespace-nowrap text-slate-400">
-                      {isRecTransfer || !(r.otherCashAmount && parseFloat(r.otherCashAmount) > 0) ? '—' : (
-                        <>
-                          ৳{Number(r.otherCashAmount).toLocaleString()}
-                          {r.otherCashSource && (
-                            <span className="text-[10px] text-slate-500 block">
-                              ({r.otherCashSource})
+                    <tr key={r.id} className="hover:bg-slate-900/20 transition-all text-slate-300">
+                      <td className="p-4 whitespace-nowrap font-medium text-slate-400">
+                        <span className="flex items-center gap-1.5">
+                          <Calendar className="w-3.5 h-3.5 text-slate-600" />
+                          {new Date(r.date).toLocaleString([], {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                      </td>
+                      <td className="p-4 whitespace-nowrap font-bold text-white">
+                        {isRecTransfer ? (
+                          <span className="text-pink-400">{r.salesType}</span>
+                        ) : (
+                          r.merchantName || '—'
+                        )}
+                      </td>
+                      <td className="p-4 whitespace-nowrap font-semibold text-emerald-400">
+                        ৳{Number(r.salesAmount || 0).toLocaleString()}
+                      </td>
+                      <td className="p-4 whitespace-nowrap text-slate-400">
+                        {isRecTransfer ? (
+                          '—'
+                        ) : (
+                          <>
+                            ৳{Number(r.commissionAmount || 0).toLocaleString()}
+                            <span className="text-[10px] text-slate-600 ml-1">
+                              ({r.commissionPercent}%)
                             </span>
-                          )}
-                        </>
-                      )}
-                    </td>
+                          </>
+                        )}
+                      </td>
+                      <td className="p-4 whitespace-nowrap font-semibold text-indigo-400">
+                        {isRecTransfer ? '—' : `৳${Number(r.merchantBill || 0).toLocaleString()}`}
+                      </td>
+                      <td className="p-4 whitespace-nowrap text-slate-400">
+                        {isRecTransfer || !r.discountPercent ? (
+                          '—'
+                        ) : (
+                          <>
+                            ৳{Number(r.discountAmount || 0).toLocaleString()}
+                            <span className="text-[10px] text-slate-600 ml-1">
+                              ({r.discountPercent}%)
+                            </span>
+                          </>
+                        )}
+                      </td>
+                      <td className="p-4 whitespace-nowrap text-slate-400">
+                        {isRecTransfer || !r.deliveryCharge
+                          ? '—'
+                          : `৳${Number(r.deliveryCharge).toLocaleString()}`}
+                      </td>
+                      <td className="p-4 whitespace-nowrap text-slate-400">
+                        {isRecTransfer ||
+                        !(r.otherCashAmount && parseFloat(r.otherCashAmount) > 0) ? (
+                          '—'
+                        ) : (
+                          <>
+                            ৳{Number(r.otherCashAmount).toLocaleString()}
+                            {r.otherCashSource && (
+                              <span className="text-[10px] text-slate-500 block">
+                                ({r.otherCashSource})
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </td>
 
-                    <td className="p-4 whitespace-nowrap text-slate-400">
-                      {isRecTransfer ? '—' : (r.digitalPaymentMethod || 'Cash')}
-                    </td>
-                    <td className="p-4 whitespace-nowrap font-bold text-slate-200">
-                      {isRecTransfer ? '—' : `৳${Number(r.paidByCustomer || 0).toLocaleString()}`}
-                    </td>
-                    <td className="p-4 whitespace-nowrap text-center">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          onClick={() => handleOpenEdit(r)}
-                          title="Edit Row"
-                          className="p-1.5 rounded-lg border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800 transition-all cursor-pointer"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (window.confirm('Delete this sales record from the database?')) {
-                              onDeleteRecord(r.id);
-                            }
-                          }}
-                          title="Delete Row"
-                          className="p-1.5 rounded-lg border border-slate-800 text-slate-500 hover:text-rose-400 hover:bg-rose-500/5 transition-all cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )})
+                      <td className="p-4 whitespace-nowrap text-slate-400">
+                        {isRecTransfer ? '—' : r.digitalPaymentMethod || 'Cash'}
+                      </td>
+                      <td className="p-4 whitespace-nowrap font-bold text-slate-200">
+                        {isRecTransfer ? '—' : `৳${Number(r.paidByCustomer || 0).toLocaleString()}`}
+                      </td>
+                      <td className="p-4 whitespace-nowrap text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => handleOpenEdit(r)}
+                            title="Edit Row"
+                            className="p-1.5 rounded-lg border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800 transition-all cursor-pointer"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (window.confirm('Delete this sales record from the database?')) {
+                                onDeleteRecord(r.id);
+                              }
+                            }}
+                            title="Delete Row"
+                            className="p-1.5 rounded-lg border border-slate-800 text-slate-500 hover:text-rose-400 hover:bg-rose-500/5 transition-all cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -497,7 +500,11 @@ export default function SalesManager({
             </div>
 
             {/* Drawer Form Body */}
-            <form id="sales-record-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
+            <form
+              id="sales-record-form"
+              onSubmit={handleSubmit}
+              className="flex-1 overflow-y-auto p-6 space-y-6"
+            >
               {/* DATE & MERCHANT SECTION */}
               <div className="space-y-4">
                 <h3 className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest border-b border-slate-900 pb-1.5">
@@ -507,13 +514,22 @@ export default function SalesManager({
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="text-[11px] font-medium text-slate-400">Date</label>
-                    <input
-                      type="datetime-local"
-                      required
-                      name="date"
-                      value={form.date}
-                      onChange={handleChange}
+                    <DatePicker
+                      selected={form.date ? new Date(form.date) : null}
+                      onChange={(date) => {
+                        if (date) {
+                          handleChange({
+                            target: { name: 'date', value: format(date, "yyyy-MM-dd'T'HH:mm") }
+                          });
+                        }
+                      }}
+                      showTimeSelect
+                      timeFormat="HH:mm"
+                      timeIntervals={15}
+                      timeCaption="Time"
+                      dateFormat="MMMM d, yyyy h:mm aa"
                       className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                      wrapperClassName="w-full"
                     />
                   </div>
 
@@ -536,54 +552,52 @@ export default function SalesManager({
                   </div>
                 </div>
 
-
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-medium text-slate-400 block">
-                      Merchant Name
-                    </label>
-                    <div className="flex gap-2">
-                      <select
-                        name="merchantName"
-                        value={form.merchantName}
-                        onChange={handleChange}
-                        className="flex-1 bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
-                      >
-                        <option value="">Select a merchant</option>
-                        {merchants.map(m => (
-                          <option key={m} value={m}>
-                            {m}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => setShowAddMerchant(!showAddMerchant)}
-                        className="px-3.5 rounded-xl border border-slate-800 hover:border-slate-700 bg-slate-950 text-slate-300 text-sm cursor-pointer"
-                      >
-                        +
-                      </button>
-                    </div>
-
-                    {showAddMerchant && (
-                      <div className="flex gap-2 p-3 bg-slate-950/60 border border-slate-900 rounded-xl mt-2">
-                        <input
-                          type="text"
-                          placeholder="Enter merchant title..."
-                          value={newMerchant}
-                          onChange={e => setNewMerchant(e.target.value)}
-                          className="flex-1 bg-slate-950 border border-slate-850 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-indigo-500"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleAddNewMerchant}
-                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold cursor-pointer"
-                        >
-                          Add
-                        </button>
-                      </div>
-                    )}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-medium text-slate-400 block">
+                    Merchant Name
+                  </label>
+                  <div className="flex gap-2">
+                    <select
+                      name="merchantName"
+                      value={form.merchantName}
+                      onChange={handleChange}
+                      className="flex-1 bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                    >
+                      <option value="">Select a merchant</option>
+                      {merchants.map(m => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddMerchant(!showAddMerchant)}
+                      className="px-3.5 rounded-xl border border-slate-800 hover:border-slate-700 bg-slate-950 text-slate-300 text-sm cursor-pointer"
+                    >
+                      +
+                    </button>
                   </div>
 
+                  {showAddMerchant && (
+                    <div className="flex gap-2 p-3 bg-slate-950/60 border border-slate-900 rounded-xl mt-2">
+                      <input
+                        type="text"
+                        placeholder="Enter merchant title..."
+                        value={newMerchant}
+                        onChange={e => setNewMerchant(e.target.value)}
+                        className="flex-1 bg-slate-950 border border-slate-850 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-indigo-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddNewMerchant}
+                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold cursor-pointer"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* SALES METRICS SECTION */}
@@ -623,7 +637,6 @@ export default function SalesManager({
                     </select>
                   </div>
                 </div>
-
 
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1">
@@ -729,7 +742,9 @@ export default function SalesManager({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-medium text-slate-400">Customer Payment Method</label>
+                  <label className="text-[11px] font-medium text-slate-400">
+                    Customer Payment Method
+                  </label>
                   <select
                     name="digitalPaymentMethod"
                     value={form.digitalPaymentMethod}
@@ -752,11 +767,22 @@ export default function SalesManager({
                 </div>
 
                 {/* Show Order Funded By only when Online Payment is selected (except for generic 'online' which has no deduction) */}
-                {['bkash', 'nagad', 'rocket', 'upay', 'card payment', 'bank transfer', 'internet banking', 'sslcommerz'].includes(String(form.digitalPaymentMethod || '').toLowerCase()) && (
+                {[
+                  'bkash',
+                  'nagad',
+                  'rocket',
+                  'upay',
+                  'card payment',
+                  'bank transfer',
+                  'internet banking',
+                  'sslcommerz',
+                ].includes(String(form.digitalPaymentMethod || '').toLowerCase()) && (
                   <div className="space-y-1">
                     <label className="text-[11px] font-medium text-slate-400">
                       Order Funded By
-                      <span className="ml-1 text-slate-500 normal-case font-normal">(where was the product purchase money spent from?)</span>
+                      <span className="ml-1 text-slate-500 normal-case font-normal">
+                        (where was the product purchase money spent from?)
+                      </span>
                     </label>
                     <select
                       name="paymentSource"
@@ -765,56 +791,72 @@ export default function SalesManager({
                       className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
                     >
                       <option value="cash">Hand Cash (order bought using physical cash)</option>
-                      <option value="online">Online Balance (order bought using online funds)</option>
+                      <option value="online">
+                        Online Balance (order bought using online funds)
+                      </option>
                       <option value="other_cash">Other Cash (loan / asset sale etc.)</option>
                     </select>
                   </div>
                 )}
 
                 {/* Live accounting effect badge */}
-                {form.digitalPaymentMethod && (() => {
-                  const method = String(form.digitalPaymentMethod || '').toLowerCase();
-                  const isOnlineMethod = ['bkash', 'nagad', 'rocket', 'upay', 'card payment', 'bank transfer', 'internet banking', 'sslcommerz', 'online'].includes(method);
-                  const source = form.paymentSource || 'cash';
+                {form.digitalPaymentMethod &&
+                  (() => {
+                    const method = String(form.digitalPaymentMethod || '').toLowerCase();
+                    const isOnlineMethod = [
+                      'bkash',
+                      'nagad',
+                      'rocket',
+                      'upay',
+                      'card payment',
+                      'bank transfer',
+                      'internet banking',
+                      'sslcommerz',
+                      'online',
+                    ].includes(method);
+                    const source = form.paymentSource || 'cash';
 
-                  if (method === 'online') {
-                    return (
-                      <div className="mt-1 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
-                        Online Balance INCREASES by ৳{form.paidByCustomer || 0} (No purchase cost deduction)
-                      </div>
-                    );
-                  }
-
-                  if (isOnlineMethod && source === 'cash') {
-                    return (
-                      <div className="mt-1 flex flex-col gap-1">
-                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-rose-500/10 text-rose-400 border border-rose-500/20">
-                          <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
-                          Hand Cash DECREASES by ৳{form.salesAmount || 0} (purchase cost)
-                        </div>
-                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                    if (method === 'online') {
+                      return (
+                        <div className="mt-1 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
                           <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
-                          Online Balance INCREASES by ৳{form.paidByCustomer || 0} (customer paid)
+                          Online Balance INCREASES by ৳{form.paidByCustomer || 0} (No purchase cost
+                          deduction)
                         </div>
-                      </div>
-                    );
-                  }
-                  if (isOnlineMethod && source === 'online') {
+                      );
+                    }
+
+                    if (isOnlineMethod && source === 'cash') {
+                      return (
+                        <div className="mt-1 flex flex-col gap-1">
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                            Hand Cash DECREASES by ৳{form.salesAmount || 0} (purchase cost)
+                          </div>
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                            Online Balance INCREASES by ৳{form.paidByCustomer || 0} (customer paid)
+                          </div>
+                        </div>
+                      );
+                    }
+                    if (isOnlineMethod && source === 'online') {
+                      return (
+                        <div className="mt-1 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                          Online Balance: ৳{form.paidByCustomer || 0} added, ৳
+                          {form.salesAmount || 0} deducted
+                        </div>
+                      );
+                    }
                     return (
-                      <div className="mt-1 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
-                        Online Balance: ৳{form.paidByCustomer || 0} added, ৳{form.salesAmount || 0} deducted
+                      <div className="mt-1 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                        Hand Cash: ৳{form.paidByCustomer || 0} added, ৳{form.salesAmount || 0}{' '}
+                        deducted
                       </div>
                     );
-                  }
-                  return (
-                    <div className="mt-1 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                      Hand Cash: ৳{form.paidByCustomer || 0} added, ৳{form.salesAmount || 0} deducted
-                    </div>
-                  );
-                })()}
+                  })()}
 
                 <div className="p-3 bg-slate-950 border border-slate-850 rounded-xl flex items-center justify-between mt-4">
                   <span className="text-xs font-semibold text-slate-400 flex items-center gap-1">
@@ -825,7 +867,6 @@ export default function SalesManager({
                   </span>
                   <span className="text-sm font-bold text-emerald-400">৳{form.paidByCustomer}</span>
                 </div>
-
               </div>
             </form>
 

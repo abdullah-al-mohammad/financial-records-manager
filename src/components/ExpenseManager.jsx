@@ -12,6 +12,8 @@ import {
   X,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import DatePicker from 'react-datepicker';
+import { format } from 'date-fns';
 import { toast } from 'react-toastify';
 import { getMonthFromDate } from '../utils/dates';
 import { computeNetCashBalance, sumExpensesFromRecords } from '../utils/finance';
@@ -571,13 +573,22 @@ export default function ExpenseManager({
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="text-[11px] font-medium text-slate-400">Date</label>
-                    <input
-                      type="datetime-local"
-                      required
-                      name="date"
-                      value={form.date}
-                      onChange={handleChange}
+                    <DatePicker
+                      selected={form.date ? new Date(form.date) : null}
+                      onChange={(date) => {
+                        if (date) {
+                          handleChange({
+                            target: { name: 'date', value: format(date, "yyyy-MM-dd'T'HH:mm") }
+                          });
+                        }
+                      }}
+                      showTimeSelect
+                      timeFormat="HH:mm"
+                      timeIntervals={15}
+                      timeCaption="Time"
+                      dateFormat="MMMM d, yyyy h:mm aa"
                       className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                      wrapperClassName="w-full"
                     />
                   </div>
                   <div className="space-y-1">

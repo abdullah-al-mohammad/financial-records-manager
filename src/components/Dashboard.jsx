@@ -16,6 +16,8 @@ import {
   X,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import DatePicker from 'react-datepicker';
+import { format } from 'date-fns';
 import { computeNetCashBalance } from '../utils/finance';
 
 export default function Dashboard({
@@ -964,11 +966,16 @@ export default function Dashboard({
 
               <div>
                 <label className="text-[11px] font-semibold text-slate-400 block mb-1">Date</label>
-                <input
-                  type="date"
-                  value={transferDate}
-                  onChange={e => setTransferDate(e.target.value)}
+                <DatePicker
+                  selected={transferDate ? new Date(transferDate) : null}
+                  onChange={(date) => {
+                    if (date) {
+                      setTransferDate(format(date, "yyyy-MM-dd"));
+                    }
+                  }}
+                  dateFormat="MMMM d, yyyy"
                   className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-violet-500 transition-colors"
+                  wrapperClassName="w-full"
                 />
               </div>
 

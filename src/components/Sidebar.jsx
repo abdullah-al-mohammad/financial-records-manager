@@ -1,21 +1,21 @@
 import { useState } from 'react';
-import { 
-  LayoutDashboard, 
-  ShoppingBag, 
-  Receipt, 
-  Landmark, 
-  History, 
-  Users, 
-  LogOut, 
-  Menu, 
-  X, 
-  ShieldAlert, 
+import {
+  LayoutDashboard,
+  ShoppingBag,
+  Receipt,
+  Landmark,
+  History,
+  Users,
+  LogOut,
+  Menu,
+  X,
+  ShieldAlert,
   Database,
-  ShieldCheck,
   Sun,
   Moon,
   Monitor
 } from 'lucide-react';
+import fatafatLogo from '../assets/fatafat-logo.svg';
 
 export default function Sidebar({ activeTab, setActiveTab, user, onLogout, theme, onChangeTheme }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -43,10 +43,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, theme
       {/* Mobile Top Bar */}
       <div className="lg:hidden flex items-center justify-between px-4 py-3 bg-[var(--bg-sidebar-color)] border-b border-slate-905 sticky top-0 z-40">
         <div className="flex items-center gap-2">
-          <div className="p-1.5 rounded-lg bg-gradient-to-tr from-indigo-500 to-violet-600 shadow shadow-indigo-500/20">
-            <ShieldCheck className="w-5 h-5 text-white" />
-          </div>
-          <span className="font-bold text-sm tracking-wide text-white">Financial Manager</span>
+          <img src={fatafatLogo} alt="Fatafat" className="h-7 w-auto" />
         </div>
         <button 
           onClick={() => setIsOpen(!isOpen)} 
@@ -72,14 +69,8 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, theme
       `}>
         <div>
           {/* Sidebar Brand Logo */}
-          <div className="h-16 flex items-center gap-3 px-6 border-b border-slate-900">
-            <div className="p-2 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-600 shadow-md shadow-indigo-500/25">
-              <ShieldCheck className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <span className="font-bold text-sm text-white tracking-wide block">Financial Records</span>
-              <span className="text-[10px] text-slate-500 font-medium tracking-wider uppercase block">Spreadsheet Core</span>
-            </div>
+          <div className="h-16 flex items-center px-5 border-b border-slate-900">
+            <img src={fatafatLogo} alt="Fatafat" className="h-8 w-auto" />
           </div>
 
           {/* Navigation Links */}

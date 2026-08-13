@@ -10,8 +10,10 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.0",
+    "date-fns": "^4.4.0",
     "lucide-react": "^1.17.0",
     "react": "^19.1.0",
+    "react-datepicker": "^9.1.0",
     "react-dom": "^19.1.0",
     "react-toastify": "^11.1.0",
     "tailwindcss": "^4.3.0"

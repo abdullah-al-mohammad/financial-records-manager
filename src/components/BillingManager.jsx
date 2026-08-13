@@ -11,6 +11,8 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import DatePicker from 'react-datepicker';
+import { format } from 'date-fns';
 import { toast } from 'react-toastify';
 import { compareDates, formatDisplayDate, getMonthFromDate, isDateInRange } from '../utils/dates';
 import {
@@ -486,22 +488,40 @@ export default function BillingManager({
             <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wide">
               Bill Date From
             </label>
-            <input
-              type="date"
-              value={billReportStartDate}
-              onChange={e => setBillReportStartDate(e.target.value)}
+            <DatePicker
+              selected={billReportStartDate ? new Date(billReportStartDate) : null}
+              onChange={(date) => {
+                if (date) {
+                  setBillReportStartDate(format(date, "yyyy-MM-dd"));
+                } else {
+                  setBillReportStartDate('');
+                }
+              }}
+              dateFormat="MMMM d, yyyy"
+              isClearable
+              placeholderText="Select start date"
               className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
+              wrapperClassName="w-full"
             />
           </div>
           <div className="space-y-1">
             <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wide">
               Bill Date To
             </label>
-            <input
-              type="date"
-              value={billReportEndDate}
-              onChange={e => setBillReportEndDate(e.target.value)}
+            <DatePicker
+              selected={billReportEndDate ? new Date(billReportEndDate) : null}
+              onChange={(date) => {
+                if (date) {
+                  setBillReportEndDate(format(date, "yyyy-MM-dd"));
+                } else {
+                  setBillReportEndDate('');
+                }
+              }}
+              dateFormat="MMMM d, yyyy"
+              isClearable
+              placeholderText="Select end date"
               className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
+              wrapperClassName="w-full"
             />
           </div>
         </div>
@@ -601,12 +621,16 @@ export default function BillingManager({
           <form onSubmit={handlePaymentSubmit} className="space-y-3.5">
             <div className="space-y-1">
               <label className="text-[10px] font-medium text-slate-400">Date Paid</label>
-              <input
-                type="date"
-                required
-                value={paymentDate}
-                onChange={e => setPaymentDate(e.target.value)}
+              <DatePicker
+                selected={paymentDate ? new Date(paymentDate) : null}
+                onChange={(date) => {
+                  if (date) {
+                    setPaymentDate(format(date, "yyyy-MM-dd"));
+                  }
+                }}
+                dateFormat="MMMM d, yyyy"
                 className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                wrapperClassName="w-full"
               />
             </div>
 
@@ -1012,22 +1036,40 @@ export default function BillingManager({
                     <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wide">
                       From Date
                     </label>
-                    <input
-                      type="date"
-                      value={billReportStartDate}
-                      onChange={e => setBillReportStartDate(e.target.value)}
+                    <DatePicker
+                      selected={billReportStartDate ? new Date(billReportStartDate) : null}
+                      onChange={(date) => {
+                        if (date) {
+                          setBillReportStartDate(format(date, "yyyy-MM-dd"));
+                        } else {
+                          setBillReportStartDate('');
+                        }
+                      }}
+                      dateFormat="MMMM d, yyyy"
+                      isClearable
+                      placeholderText="Select date"
                       className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-indigo-500"
+                      wrapperClassName="w-full"
                     />
                   </div>
                   <div className="space-y-1">
                     <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wide">
                       To Date
                     </label>
-                    <input
-                      type="date"
-                      value={billReportEndDate}
-                      onChange={e => setBillReportEndDate(e.target.value)}
+                    <DatePicker
+                      selected={billReportEndDate ? new Date(billReportEndDate) : null}
+                      onChange={(date) => {
+                        if (date) {
+                          setBillReportEndDate(format(date, "yyyy-MM-dd"));
+                        } else {
+                          setBillReportEndDate('');
+                        }
+                      }}
+                      dateFormat="MMMM d, yyyy"
+                      isClearable
+                      placeholderText="Select date"
                       className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-indigo-500"
+                      wrapperClassName="w-full"
                     />
                   </div>
                 </div>

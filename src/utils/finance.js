@@ -45,8 +45,14 @@ export function computeNetCashBalance(records, payments, transfers = []) {
     const customerPayment = parseFloat(r.paidByCustomer || r.salesAmount) || 0;
     const purchaseCost = parseFloat(r.salesAmount) || 0;
 
-    const rawSource = String(r.paymentSource || 'cash').toLowerCase().trim();
-    const sourceBucket = rawSource === 'online' ? 'online' : (rawSource === 'other_cash' || rawSource === 'other cash') ? 'other_cash' : 'cash';
+    // paymentSource is ONLY set when the user explicitly chose a funding bucket.
+    // An empty/missing value means "no product purchase" — do not deduct from any bucket.
+    const rawSource = String(r.paymentSource || '').toLowerCase().trim();
+    const hasExplicitFunding = rawSource !== '';
+    const sourceBucket =
+      rawSource === 'online' ? 'online'
+      : (rawSource === 'other_cash' || rawSource === 'other cash') ? 'other_cash'
+      : 'cash';
     const customerBucket = getPaymentBucket(r.digitalPaymentMethod || '');
 
     // 1. Customer Payment (Income collected)
@@ -57,12 +63,20 @@ export function computeNetCashBalance(records, payments, transfers = []) {
     }
 
     // 2. Order Purchase Cost (Money spent by business to buy the order)
-    if (sourceBucket === 'online') {
-      onlineExpenses += purchaseCost;
-    } else if (sourceBucket === 'other_cash') {
-      otherCashExpenses += purchaseCost;
-    } else {
-      cashExpenses += purchaseCost;
+    // Only deduct when:
+    //   a) the customer paid online (i.e., a product was separately procured)
+    //   b) paymentSource was explicitly chosen by the user (not empty)
+    //   c) the digital payment method is NOT explicitly the generic 'online' (where no deduction should happen)
+    const isGenericOnline = String(r.digitalPaymentMethod || '').toLowerCase().trim() === 'online';
+    if (customerBucket === 'online' && purchaseCost > 0 && hasExplicitFunding && !isGenericOnline) {
+      if (sourceBucket === 'online') {
+        onlineExpenses += purchaseCost;
+      } else if (sourceBucket === 'other_cash') {
+        otherCashExpenses += purchaseCost;
+      } else {
+        // sourceBucket === 'cash': user explicitly said Hand Cash funded this purchase
+        cashExpenses += purchaseCost;
+      }
     }
 
     otherCashCollected += parseFloat(r.otherCashAmount) || 0;

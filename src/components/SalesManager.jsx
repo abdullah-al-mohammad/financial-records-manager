@@ -1,12 +1,11 @@
 import {
-  ArrowRightLeft,
   Calendar,
   Edit2,
   Plus,
   Search,
   SlidersHorizontal,
   Trash2,
-  X,
+  X
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
@@ -49,6 +48,7 @@ const ONLINE_KEYWORDS = [
   'bank transfer',
   'internet banking',
   'mobile banking',
+  'online',
 ];
 
 const CASH_KEYWORDS = ['cash', 'cash on delivery', 'cod'];
@@ -150,6 +150,11 @@ export default function SalesManager({
         updated.month = MONTHS[d.getMonth()] || prev.month;
       }
 
+      // Automatically default paymentSource to empty (no deduction) if 'online' is selected as payment method
+      if (name === 'digitalPaymentMethod' && value === 'online') {
+        updated.paymentSource = '';
+      }
+
       const derived = computeDerived(updated);
       return { ...updated, ...derived };
     });
@@ -208,7 +213,8 @@ export default function SalesManager({
       riderSalary: form.riderSalary ? String(form.riderSalary) : '0',
       otherExpense: form.otherExpense ? String(form.otherExpense) : '0',
       fixedExpense: form.fixedExpense ? String(form.fixedExpense) : '0',
-      paymentSource: form.paymentSource || 'cash',
+      // Preserve empty string for 'online' (no-deduction) payment method; only default to 'cash' when truly unset
+      paymentSource: form.paymentSource !== undefined ? form.paymentSource : 'cash',
     };
 
     try {
@@ -500,7 +506,7 @@ export default function SalesManager({
             </div>
 
             {/* Drawer Form Body */}
-            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
+            <form id="sales-record-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
               {/* DATE & MERCHANT SECTION */}
               <div className="space-y-4">
                 <h3 className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest border-b border-slate-900 pb-1.5">
@@ -741,6 +747,7 @@ export default function SalesManager({
                   >
                     <option value="">Cash / Physical Collection</option>
                     <optgroup label="── Online Payment Methods ──">
+                      <option value="online">Online Payment (No Cash Deduction)</option>
                       <option value="bkash">bKash</option>
                       <option value="nagad">Nagad</option>
                       <option value="rocket">Rocket</option>
@@ -753,8 +760,8 @@ export default function SalesManager({
                   </select>
                 </div>
 
-                {/* Show Order Funded By only when Online Payment is selected */}
-                {['bkash', 'nagad', 'rocket', 'upay', 'card payment', 'bank transfer', 'internet banking', 'sslcommerz', 'online'].includes(String(form.digitalPaymentMethod || '').toLowerCase()) && (
+                {/* Show Order Funded By only when Online Payment is selected (except for generic 'online' which has no deduction) */}
+                {['bkash', 'nagad', 'rocket', 'upay', 'card payment', 'bank transfer', 'internet banking', 'sslcommerz'].includes(String(form.digitalPaymentMethod || '').toLowerCase()) && (
                   <div className="space-y-1">
                     <label className="text-[11px] font-medium text-slate-400">
                       Order Funded By
@@ -775,8 +782,18 @@ export default function SalesManager({
 
                 {/* Live accounting effect badge */}
                 {form.digitalPaymentMethod && (() => {
-                  const isOnlineMethod = ['bkash', 'nagad', 'rocket', 'upay', 'card payment', 'bank transfer', 'internet banking', 'sslcommerz', 'online'].includes(String(form.digitalPaymentMethod || '').toLowerCase());
+                  const method = String(form.digitalPaymentMethod || '').toLowerCase();
+                  const isOnlineMethod = ['bkash', 'nagad', 'rocket', 'upay', 'card payment', 'bank transfer', 'internet banking', 'sslcommerz', 'online'].includes(method);
                   const source = form.paymentSource || 'cash';
+
+                  if (method === 'online') {
+                    return (
+                      <div className="mt-1 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                        Online Balance INCREASES by ৳{form.paidByCustomer || 0} (No purchase cost deduction)
+                      </div>
+                    );
+                  }
 
                   if (isOnlineMethod && source === 'cash') {
                     return (
@@ -808,10 +825,6 @@ export default function SalesManager({
                   );
                 })()}
 
-
-
-
-
                 <div className="p-3 bg-slate-950 border border-slate-850 rounded-xl flex items-center justify-between mt-4">
                   <span className="text-xs font-semibold text-slate-400 flex items-center gap-1">
                     Customer Grand Total:
@@ -836,8 +849,8 @@ export default function SalesManager({
               </button>
 
               <button
-                type="button"
-                onClick={handleSubmit}
+                type="submit"
+                form="sales-record-form"
                 disabled={isSubmitting}
                 className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-indigo-600/10 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >

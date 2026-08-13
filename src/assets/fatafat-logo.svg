@@ -1,13 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80" fill="none">
   <style>
     .brand-text { fill: #ffffff; }
-    @media print {
-      .brand-text { fill: #111111; }
-    }
-    @media (prefers-color-scheme: light) {
-      /* If you want it black in light mode later, uncomment: */
-      /* .brand-text { fill: #111111; } */
-    }
   </style>
   <!-- Wing / speed-lines icon (white wordmark variant for dark sidebar) -->
   <!-- Line 1 (top) — full white -->

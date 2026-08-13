@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 120" fill="none">
+  <!-- Wing / Speed Stripe Icon -->
+  <!-- Top stripe (orange) -->
+  <path d="M8 28 L68 28 L58 42 L8 42 Z" fill="#F07820"/>
+  <!-- Top stripe black overlay -->
+  <path d="M20 28 L68 28 L58 42 L20 42 Z" fill="#111111"/>
+
+  <!-- Middle stripe (orange) -->
+  <path d="M4 50 L68 50 L58 64 L4 64 Z" fill="#F07820"/>
+  <!-- Middle stripe black overlay -->
+  <path d="M16 50 L68 50 L58 64 L16 64 Z" fill="#111111"/>
+
+  <!-- Bottom stripe (orange) -->
+  <path d="M8 72 L68 72 L58 86 L8 86 Z" fill="#F07820"/>
+  <!-- Bottom stripe black overlay -->
+  <path d="M20 72 L68 72 L58 86 L20 86 Z" fill="#111111"/>
+
+  <!-- Wordmark: FATAFAT -->
+  <text
+    x="90"
+    y="85"
+    font-family="'Arial Black', 'Helvetica Neue', Arial, sans-serif"
+    font-size="58"
+    font-weight="900"
+    letter-spacing="2"
+    fill="#111111"
+  >FATAFAT</text>
+</svg>

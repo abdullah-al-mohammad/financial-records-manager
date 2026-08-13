@@ -1,20 +1,20 @@
-import { useState } from 'react';
 import {
-  LayoutDashboard,
-  ShoppingBag,
-  Receipt,
-  Landmark,
+  Database,
   History,
-  Users,
+  Landmark,
+  LayoutDashboard,
   LogOut,
   Menu,
-  X,
-  ShieldAlert,
-  Database,
-  Sun,
+  Monitor,
   Moon,
-  Monitor
+  Receipt,
+  ShieldAlert,
+  ShoppingBag,
+  Sun,
+  Users,
+  X,
 } from 'lucide-react';
+import { useState } from 'react';
 import fatafatLogo from '../assets/fatafat-logo.svg';
 
 export default function Sidebar({ activeTab, setActiveTab, user, onLogout, theme, onChangeTheme }) {
@@ -33,7 +33,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, theme
     menuItems.push({ id: 'admin', label: 'Admin Settings', icon: Users });
   }
 
-  const handleNav = (tabId) => {
+  const handleNav = tabId => {
     setActiveTab(tabId);
     setIsOpen(false);
   };
@@ -43,12 +43,15 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, theme
       {/* Mobile Top Bar */}
       <div className="lg:hidden flex items-center justify-between px-4 py-3 bg-[var(--bg-sidebar-color)] border-b border-slate-905 sticky top-0 z-40">
         <div className="flex items-center gap-2">
-          <div className="bg-slate-950 p-1.5 rounded-lg shadow-sm border border-slate-800">
+          <div 
+            className="bg-black p-1.5 rounded-lg shadow-sm border border-slate-800"
+            style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}
+          >
             <img src={fatafatLogo} alt="Fatafat" className="h-6 w-auto" />
           </div>
         </div>
-        <button 
-          onClick={() => setIsOpen(!isOpen)} 
+        <button
+          onClick={() => setIsOpen(!isOpen)}
           className="p-1.5 rounded-lg border border-slate-800 text-slate-400 hover:text-white"
         >
           {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -57,29 +60,34 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, theme
 
       {/* Sidebar Overlay for Mobile */}
       {isOpen && (
-        <div 
+        <div
           onClick={() => setIsOpen(false)}
           className="lg:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
         />
       )}
 
       {/* Main Sidebar Container */}
-      <aside className={`
+      <aside
+        className={`
         fixed inset-y-0 left-0 z-50 w-64 bg-[var(--bg-sidebar-color)] border-r border-slate-900/80 flex flex-col justify-between
         transform lg:transform-none transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-      `}>
+      `}
+      >
         <div>
           {/* Sidebar Brand Logo */}
-          <div className="h-16 flex items-center px-5 border-b border-slate-900">
-            <div className="bg-slate-950 p-2 rounded-xl shadow-sm border border-slate-800">
+          <div className="h-16 flex items-center px-5 border-b border-slate-900 print:border-transparent">
+            <div 
+              className="bg-black p-2 rounded-xl shadow-sm border border-slate-800"
+              style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}
+            >
               <img src={fatafatLogo} alt="Fatafat" className="h-7 w-auto" />
             </div>
           </div>
 
           {/* Navigation Links */}
           <nav className="p-4 space-y-1">
-            {menuItems.map((item) => {
+            {menuItems.map(item => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
               return (
@@ -88,13 +96,16 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, theme
                   onClick={() => handleNav(item.id)}
                   className={`
                     w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold tracking-wide transition-all duration-200
-                    ${isActive 
-                      ? 'bg-gradient-to-r from-indigo-600/90 to-violet-600/90 text-white shadow-lg shadow-indigo-600/15' 
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/40'
+                    ${
+                      isActive
+                        ? 'bg-gradient-to-r from-indigo-600/90 to-violet-600/90 text-white shadow-lg shadow-indigo-600/15'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/40'
                     }
                   `}
                 >
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-300'}`} />
+                  <Icon
+                    className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-300'}`}
+                  />
                   {item.label}
                 </button>
               );
@@ -110,12 +121,16 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, theme
               {user?.isLive ? (
                 <>
                   <Database className="w-3.5 h-3.5 text-indigo-400" />
-                  <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider">Live Sync</span>
+                  <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider">
+                    Live Sync
+                  </span>
                 </>
               ) : (
                 <>
                   <ShieldAlert className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
-                  <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Demo Mode</span>
+                  <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">
+                    Demo Mode
+                  </span>
                 </>
               )}
             </div>
@@ -124,15 +139,17 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, theme
 
           {/* Theme Selector Option */}
           <div className="p-3 bg-slate-900/20 rounded-xl border border-slate-900/30 space-y-2">
-            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Interface Style</span>
+            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">
+              Interface Style
+            </span>
             <div className="grid grid-cols-3 gap-1 bg-slate-950 p-1 rounded-xl border border-slate-900">
               <button
                 type="button"
                 onClick={() => onChangeTheme('light')}
                 title="Light Mode"
                 className={`flex flex-col items-center justify-center py-1.5 rounded-lg transition-all cursor-pointer ${
-                  theme === 'light' 
-                    ? 'bg-indigo-600 text-white shadow shadow-indigo-600/10' 
+                  theme === 'light'
+                    ? 'bg-indigo-600 text-white shadow shadow-indigo-600/10'
                     : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900/40'
                 }`}
               >
@@ -145,8 +162,8 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, theme
                 onClick={() => onChangeTheme('dark')}
                 title="Dark Mode"
                 className={`flex flex-col items-center justify-center py-1.5 rounded-lg transition-all cursor-pointer ${
-                  theme === 'dark' 
-                    ? 'bg-indigo-600 text-white shadow shadow-indigo-600/10' 
+                  theme === 'dark'
+                    ? 'bg-indigo-600 text-white shadow shadow-indigo-600/10'
                     : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900/40'
                 }`}
               >
@@ -159,8 +176,8 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, theme
                 onClick={() => onChangeTheme('auto')}
                 title="Auto Detect"
                 className={`flex flex-col items-center justify-center py-1.5 rounded-lg transition-all cursor-pointer ${
-                  theme === 'auto' 
-                    ? 'bg-indigo-600 text-white shadow shadow-indigo-600/10' 
+                  theme === 'auto'
+                    ? 'bg-indigo-600 text-white shadow shadow-indigo-600/10'
                     : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900/40'
                 }`}
               >

@@ -43,7 +43,9 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, theme
       {/* Mobile Top Bar */}
       <div className="lg:hidden flex items-center justify-between px-4 py-3 bg-[var(--bg-sidebar-color)] border-b border-slate-905 sticky top-0 z-40">
         <div className="flex items-center gap-2">
-          <img src={fatafatLogo} alt="Fatafat" className="h-7 w-auto" />
+          <div className="bg-slate-950 p-1.5 rounded-lg shadow-sm border border-slate-800">
+            <img src={fatafatLogo} alt="Fatafat" className="h-6 w-auto" />
+          </div>
         </div>
         <button 
           onClick={() => setIsOpen(!isOpen)} 
@@ -70,7 +72,9 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, theme
         <div>
           {/* Sidebar Brand Logo */}
           <div className="h-16 flex items-center px-5 border-b border-slate-900">
-            <img src={fatafatLogo} alt="Fatafat" className="h-8 w-auto" />
+            <div className="bg-slate-950 p-2 rounded-xl shadow-sm border border-slate-800">
+              <img src={fatafatLogo} alt="Fatafat" className="h-7 w-auto" />
+            </div>
           </div>
 
           {/* Navigation Links */}

@@ -45,8 +45,6 @@ export function computeNetCashBalance(records, payments, transfers = []) {
     const customerPayment = parseFloat(r.paidByCustomer || r.salesAmount) || 0;
     const purchaseCost = parseFloat(r.salesAmount) || 0;
 
-    // paymentSource is ONLY set when the user explicitly chose a funding bucket.
-    // An empty/missing value means "no product purchase" — do not deduct from any bucket.
     const rawSource = String(r.paymentSource || '').toLowerCase().trim();
     const hasExplicitFunding = rawSource !== '';
     const sourceBucket =
@@ -62,11 +60,7 @@ export function computeNetCashBalance(records, payments, transfers = []) {
       cashCollected += customerPayment;
     }
 
-    // 2. Order Purchase Cost (Money spent by business to buy the order)
-    // Only deduct when:
-    //   a) the customer paid online (i.e., a product was separately procured)
-    //   b) paymentSource was explicitly chosen by the user (not empty)
-    //   c) the digital payment method is NOT explicitly the generic 'online' (where no deduction should happen)
+    // 2. Order Purchase Cost
     const isGenericOnline = String(r.digitalPaymentMethod || '').toLowerCase().trim() === 'online';
     if (customerBucket === 'online' && purchaseCost > 0 && hasExplicitFunding && !isGenericOnline) {
       if (sourceBucket === 'online') {
@@ -74,7 +68,6 @@ export function computeNetCashBalance(records, payments, transfers = []) {
       } else if (sourceBucket === 'other_cash') {
         otherCashExpenses += purchaseCost;
       } else {
-        // sourceBucket === 'cash': user explicitly said Hand Cash funded this purchase
         cashExpenses += purchaseCost;
       }
     }
@@ -110,7 +103,6 @@ export function computeNetCashBalance(records, payments, transfers = []) {
     if (t.type === 'online_to_cash') {
       onlineToCash += amt;
     } else {
-      // Default: cash_to_online
       cashToOnline += amt;
     }
   });

@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from 'react';
 import DatePicker from 'react-datepicker';
 import { format } from 'date-fns';
 import { toast } from 'react-toastify';
+import fatafatLogo from '../assets/fatafat-logo.svg';
 import { compareDates, formatDisplayDate, getMonthFromDate, isDateInRange } from '../utils/dates';
 import {
   getDueBillReminders,
@@ -1217,14 +1218,22 @@ export default function BillingManager({
 
       {/* Hidden Printable Report Area */}
       <div className="printable-report-area hidden bg-white text-black p-8 font-sans w-full max-w-4xl mx-auto">
-        <div className="flex justify-between items-center border-b-2 border-slate-300 pb-4 mb-6">
-          <div>
-            <h1 className="text-xl font-bold text-slate-800 tracking-tight">
-              Merchant Statement of Accounts
-            </h1>
-            <p className="text-[10px] text-slate-500 mt-1">
-              Generated: {new Date().toLocaleDateString('en-GB')}
-            </p>
+        <div className="flex justify-between items-start border-b-2 border-slate-300 pb-4 mb-6">
+          <div className="flex flex-col gap-4">
+            <div 
+              className="bg-black inline-flex p-2.5 rounded-xl shadow-sm self-start"
+              style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}
+            >
+              <img src={fatafatLogo} alt="Fatafat" className="h-7 w-auto" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-slate-800 tracking-tight">
+                Merchant Statement of Accounts
+              </h1>
+              <p className="text-[10px] text-slate-500 mt-1">
+                Generated: {new Date().toLocaleDateString('en-GB')}
+              </p>
+            </div>
           </div>
           <div className="text-right">
             <h2 className="text-base font-bold text-slate-900">{activeReportMerchant}</h2>

@@ -60,13 +60,11 @@ const getPaymentBucket = value => {
 
   const isOnline = ONLINE_KEYWORDS.some(k => v.includes(k));
   if (isOnline) return 'online';
-
-  // anything else (including explicit 'cash') falls through to cash
   return 'cash';
 };
 
 const defaultForm = {
-  date: new Date().toISOString().slice(0, 16), // yyyy-MM-ddTHH:mm
+  date: new Date().toISOString().slice(0, 16),
   month: MONTHS[new Date().getMonth()],
   merchantName: '',
   salesAmount: '',
@@ -114,17 +112,14 @@ export default function SalesManager({
     }
   }, [editTarget]);
 
-  // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
   const [filterMonth, setFilterMonth] = useState('All');
   const [filterType, setFilterType] = useState('All');
   const [showFilters, setShowFilters] = useState(false);
 
-  // New merchant creation inline
   const [showAddMerchant, setShowAddMerchant] = useState(false);
   const [newMerchant, setNewMerchant] = useState('');
 
-  // Auto-derived calculations helper
   const computeDerived = f => {
     const sales = parseFloat(f.salesAmount) || 0;
     const commissionPct = parseFloat(f.commissionPercent) || 0;
@@ -150,7 +145,6 @@ export default function SalesManager({
         updated.month = MONTHS[d.getMonth()] || prev.month;
       }
 
-      // Automatically default paymentSource to empty (no deduction) if 'online' is selected as payment method
       if (name === 'digitalPaymentMethod' && value === 'online') {
         updated.paymentSource = '';
       }
@@ -160,7 +154,6 @@ export default function SalesManager({
     });
   };
 
-  // Open drawer for creating a new record
   const handleOpenNew = () => {
     setForm({
       ...defaultForm,
@@ -171,7 +164,6 @@ export default function SalesManager({
     setIsOpen(true);
   };
 
-  // Open drawer for editing a record
   const handleOpenEdit = rec => {
     setForm({
       ...rec,
@@ -192,7 +184,7 @@ export default function SalesManager({
 
   const handleSubmit = async e => {
     e.preventDefault();
-    if (isSubmitting) return; // prevent double submission
+    if (isSubmitting) return;
     setIsSubmitting(true);
     if (!editingId && form.salesAmount && form.salesAmount !== '' && !form.merchantName) {
       toast.error('Merchant name is required for sales records');
@@ -213,7 +205,6 @@ export default function SalesManager({
       riderSalary: form.riderSalary ? String(form.riderSalary) : '0',
       otherExpense: form.otherExpense ? String(form.otherExpense) : '0',
       fixedExpense: form.fixedExpense ? String(form.fixedExpense) : '0',
-      // Preserve empty string for 'online' (no-deduction) payment method; only default to 'cash' when truly unset
       paymentSource: form.paymentSource !== undefined ? form.paymentSource : 'cash',
     };
 

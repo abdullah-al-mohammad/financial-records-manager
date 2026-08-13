@@ -20,7 +20,6 @@ export default function App() {
   const [merchants, setMerchants] = useState([]);
   const [transfers, setTransfers] = useState([]);
 
-
   // Edit target bridging from Expense to Sales
   const [editTarget, setEditTarget] = useState(null);
 
@@ -138,8 +137,6 @@ export default function App() {
     setCurrentUser(session);
     showToast('Logged in successfully!');
   };
-
-
 
   // Transaction Operations (CRUD)
   const handleAddRecord = async record => {
@@ -275,8 +272,6 @@ export default function App() {
       setLoading(false);
     }
   };
-
-
 
   // Bridge navigation from Expense logs to Sales drawer edit (legacy — no longer used)
   const clearEditTarget = () => {

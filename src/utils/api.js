@@ -82,6 +82,64 @@ const DEFAULT_PAYMENTS = [
   },
 ];
 
+const DEFAULT_RECEIVABLES = [
+  {
+    id: 'rec_1',
+    name: 'Karim Enterprise',
+    amount: '12000',
+    date: '2026-09-01',
+    note: 'Wholesale inventory refund',
+    status: 'Not Received',
+  },
+  {
+    id: 'rec_2',
+    name: 'Rahim Chowdhury',
+    amount: '8500',
+    date: '2026-08-28',
+    note: 'Consultation fee settlement',
+    status: 'Received',
+    receivedAccount: 'cash',
+    receivedDate: '2026-08-30',
+  },
+  {
+    id: 'rec_3',
+    name: 'City Tech Agency',
+    amount: '15000',
+    date: '2026-09-02',
+    note: 'Software dev advance payout',
+    status: 'Not Received',
+  },
+];
+
+const DEFAULT_PAYABLES = [
+  {
+    id: 'pay_1',
+    name: 'Packaging World Ltd',
+    amount: '6000',
+    date: '2026-09-02',
+    note: 'Delivery boxes and bubble wrap',
+    status: 'Unpaid',
+  },
+  {
+    id: 'pay_2',
+    name: 'City Printing House',
+    amount: '2500',
+    date: '2026-08-27',
+    note: 'Thermal bill rolls and marketing flyers',
+    status: 'Paid',
+    paidAccount: 'cash',
+    paidDate: '2026-08-29',
+  },
+  {
+    id: 'pay_3',
+    name: 'Speedy Bike Workshop',
+    amount: '4000',
+    date: '2026-09-01',
+    note: 'Fleet vehicle servicing and parts',
+    status: 'Unpaid',
+  },
+];
+
 // SHA-256 implementation using Web Crypto API
 export async function hashPassword(password) {
   try {
@@ -124,6 +182,8 @@ const mockDb = {
       this.set('merchants', DEFAULT_RECHANTS);
       this.set('transfers', []);
       this.set('withdrawals', []);
+      this.set('receivables', DEFAULT_RECEIVABLES);
+      this.set('payables', DEFAULT_PAYABLES);
 
       const adminHash = await hashPassword('admin123');
       const userHash = await hashPassword('user123');
@@ -143,6 +203,19 @@ const mockDb = {
       ]);
 
       localStorage.setItem('fm_mock_initialized', 'true');
+    } else {
+      if (!localStorage.getItem('fm_mock_receivables_initialized')) {
+        if (!this.get('receivables', null)) {
+          this.set('receivables', DEFAULT_RECEIVABLES);
+        }
+        localStorage.setItem('fm_mock_receivables_initialized', 'true');
+      }
+      if (!localStorage.getItem('fm_mock_payables_initialized')) {
+        if (!this.get('payables', null)) {
+          this.set('payables', DEFAULT_PAYABLES);
+        }
+        localStorage.setItem('fm_mock_payables_initialized', 'true');
+      }
     }
   },
   logAudit(username, action, details) {
@@ -541,7 +614,179 @@ export const api = {
     }
   },
 
+  // --- RECEIVABLES (Money I Will Receive) ---
+  async getAllReceivables() {
+    if (isLiveMode()) {
+      const resp = await makeJsonpRequest('getReceivables');
+      return resp.receivables || [];
+    } else {
+      await new Promise(r => setTimeout(r, 100));
+      const recs = mockDb.get('receivables', null);
+      if (recs === null) {
+        mockDb.set('receivables', DEFAULT_RECEIVABLES);
+        return DEFAULT_RECEIVABLES;
+      }
+      return recs;
+    }
+  },
 
+  async createReceivable(receivable) {
+    if (isLiveMode()) {
+      return makeJsonpRequest('createReceivable', { receivable });
+    } else {
+      await new Promise(r => setTimeout(r, 150));
+      const list = mockDb.get('receivables', null) || DEFAULT_RECEIVABLES;
+      const newRec = {
+        ...receivable,
+        id: 'rec_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+        status: receivable.status || 'Not Received',
+        createdAt: new Date().toISOString(),
+      };
+      const updated = [...list, newRec];
+      mockDb.set('receivables', updated);
+
+      const session = getCurrentSession();
+      mockDb.logAudit(
+        session?.username || 'admin',
+        'Create Receivable',
+        `ID: ${newRec.id}, Name: ${newRec.name}, Amount: ৳${newRec.amount}`
+      );
+      return { success: true, id: newRec.id };
+    }
+  },
+
+  async updateReceivable(receivable) {
+    if (isLiveMode()) {
+      return makeJsonpRequest('updateReceivable', { receivable });
+    } else {
+      await new Promise(r => setTimeout(r, 150));
+      const list = mockDb.get('receivables', null) || DEFAULT_RECEIVABLES;
+      const idx = list.findIndex(r => r.id === receivable.id);
+      if (idx === -1) throw new Error('Receivable record not found');
+
+      const oldRec = list[idx];
+      list[idx] = { ...oldRec, ...receivable };
+      mockDb.set('receivables', list);
+
+      const session = getCurrentSession();
+      const actionDesc =
+        receivable.status === 'Received' && oldRec.status !== 'Received'
+          ? `Received ৳${receivable.amount} from ${receivable.name} into ${receivable.receivedAccount || 'cash'}`
+          : `Update Receivable: ${receivable.name}, ৳${receivable.amount}`;
+
+      mockDb.logAudit(session?.username || 'admin', 'Update Receivable', actionDesc);
+      return { success: true };
+    }
+  },
+
+  async deleteReceivable(id) {
+    if (isLiveMode()) {
+      return makeJsonpRequest('deleteReceivable', { id });
+    } else {
+      await new Promise(r => setTimeout(r, 150));
+      const list = mockDb.get('receivables', null) || DEFAULT_RECEIVABLES;
+      const target = list.find(r => r.id === id);
+      if (!target) throw new Error('Receivable record not found');
+
+      const filtered = list.filter(r => r.id !== id);
+      mockDb.set('receivables', filtered);
+
+      const session = getCurrentSession();
+      mockDb.logAudit(
+        session?.username || 'admin',
+        'Delete Receivable',
+        `ID: ${id}, Name: ${target.name}, Amount: ৳${target.amount}`
+      );
+      return { success: true };
+    }
+  },
+
+  // --- PAYABLES (Money I Owe) ---
+  async getAllPayables() {
+    if (isLiveMode()) {
+      const resp = await makeJsonpRequest('getPayables');
+      return resp.payables || [];
+    } else {
+      await new Promise(r => setTimeout(r, 100));
+      const pays = mockDb.get('payables', null);
+      if (pays === null) {
+        mockDb.set('payables', DEFAULT_PAYABLES);
+        return DEFAULT_PAYABLES;
+      }
+      return pays;
+    }
+  },
+
+  async createPayable(payable) {
+    if (isLiveMode()) {
+      return makeJsonpRequest('createPayable', { payable });
+    } else {
+      await new Promise(r => setTimeout(r, 150));
+      const list = mockDb.get('payables', null) || DEFAULT_PAYABLES;
+      const newPay = {
+        ...payable,
+        id: 'pay_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+        status: payable.status || 'Unpaid',
+        createdAt: new Date().toISOString(),
+      };
+      const updated = [...list, newPay];
+      mockDb.set('payables', updated);
+
+      const session = getCurrentSession();
+      mockDb.logAudit(
+        session?.username || 'admin',
+        'Create Payable',
+        `ID: ${newPay.id}, Name: ${newPay.name}, Amount: ৳${newPay.amount}`
+      );
+      return { success: true, id: newPay.id };
+    }
+  },
+
+  async updatePayable(payable) {
+    if (isLiveMode()) {
+      return makeJsonpRequest('updatePayable', { payable });
+    } else {
+      await new Promise(r => setTimeout(r, 150));
+      const list = mockDb.get('payables', null) || DEFAULT_PAYABLES;
+      const idx = list.findIndex(p => p.id === payable.id);
+      if (idx === -1) throw new Error('Payable record not found');
+
+      const oldPay = list[idx];
+      list[idx] = { ...oldPay, ...payable };
+      mockDb.set('payables', list);
+
+      const session = getCurrentSession();
+      const actionDesc =
+        payable.status === 'Paid' && oldPay.status !== 'Paid'
+          ? `Paid ৳${payable.amount} to ${payable.name} from ${payable.paidAccount || 'cash'}`
+          : `Update Payable: ${payable.name}, ৳${payable.amount}`;
+
+      mockDb.logAudit(session?.username || 'admin', 'Update Payable', actionDesc);
+      return { success: true };
+    }
+  },
+
+  async deletePayable(id) {
+    if (isLiveMode()) {
+      return makeJsonpRequest('deletePayable', { id });
+    } else {
+      await new Promise(r => setTimeout(r, 150));
+      const list = mockDb.get('payables', null) || DEFAULT_PAYABLES;
+      const target = list.find(p => p.id === id);
+      if (!target) throw new Error('Payable record not found');
+
+      const filtered = list.filter(p => p.id !== id);
+      mockDb.set('payables', filtered);
+
+      const session = getCurrentSession();
+      mockDb.logAudit(
+        session?.username || 'admin',
+        'Delete Payable',
+        `ID: ${id}, Name: ${target.name}, Amount: ৳${target.amount}`
+      );
+      return { success: true };
+    }
+  },
 
   // --- MERCHANT RETRIEVAL ---
   async getMerchants() {

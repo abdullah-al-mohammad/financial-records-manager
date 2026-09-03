@@ -33,7 +33,7 @@ export function sumMerchantPayouts(payments) {
   return payments.reduce((sum, p) => sum + (parseFloat(p.paidAmount) || 0), 0);
 }
 
-export function computeNetCashBalance(records, payments, transfers = []) {
+export function computeNetCashBalance(records, payments, transfers = [], receivables = [], payables = []) {
   let onlineCollected = 0;
   let cashCollected = 0;
   let otherCashCollected = 0;
@@ -48,7 +48,7 @@ export function computeNetCashBalance(records, payments, transfers = []) {
     const rawSource = String(r.paymentSource || '').toLowerCase().trim();
     const hasExplicitFunding = rawSource !== '';
     const sourceBucket =
-      rawSource === 'online' ? 'online'
+      getPaymentBucket(rawSource) === 'online' ? 'online'
       : (rawSource === 'other_cash' || rawSource === 'other cash') ? 'other_cash'
       : 'cash';
     const customerBucket = getPaymentBucket(r.digitalPaymentMethod || '');
@@ -88,6 +88,56 @@ export function computeNetCashBalance(records, payments, transfers = []) {
       } else {
         cashExpenses += expenseAmount;
       }
+    }
+  });
+
+  // Process Receivables (Money I Will Receive)
+  let receivablesCollectedCash = 0;
+  let receivablesCollectedOnline = 0;
+  let receivablesCollectedOtherCash = 0;
+
+  receivables.forEach(rec => {
+    const isReceived = rec.status === 'Received' || rec.paymentStatus === 'Received';
+    if (!isReceived) return;
+
+    const amt = parseFloat(rec.amount) || 0;
+    if (amt <= 0) return;
+
+    const targetAccount = String(rec.receivedAccount || rec.paymentMethod || 'cash').toLowerCase().trim();
+    if (targetAccount === 'other_cash' || targetAccount === 'other cash') {
+      otherCashCollected += amt;
+      receivablesCollectedOtherCash += amt;
+    } else if (getPaymentBucket(targetAccount) === 'online' || targetAccount === 'online') {
+      onlineCollected += amt;
+      receivablesCollectedOnline += amt;
+    } else {
+      cashCollected += amt;
+      receivablesCollectedCash += amt;
+    }
+  });
+
+  // Process Payables (Money I Will Pay / Money I Owe)
+  let payablesPaidCash = 0;
+  let payablesPaidOnline = 0;
+  let payablesPaidOtherCash = 0;
+
+  payables.forEach(pay => {
+    const isPaid = pay.status === 'Paid' || pay.paymentStatus === 'Paid';
+    if (!isPaid) return;
+
+    const amt = parseFloat(pay.amount) || 0;
+    if (amt <= 0) return;
+
+    const targetAccount = String(pay.paidAccount || pay.paymentMethod || 'cash').toLowerCase().trim();
+    if (targetAccount === 'other_cash' || targetAccount === 'other cash') {
+      otherCashExpenses += amt;
+      payablesPaidOtherCash += amt;
+    } else if (getPaymentBucket(targetAccount) === 'online' || targetAccount === 'online') {
+      onlineExpenses += amt;
+      payablesPaidOnline += amt;
+    } else {
+      cashExpenses += amt;
+      payablesPaidCash += amt;
     }
   });
 
@@ -138,5 +188,13 @@ export function computeNetCashBalance(records, payments, transfers = []) {
     expenses,
     merchantPayouts,
     netRemaining,
+    receivablesCollectedCash,
+    receivablesCollectedOnline,
+    receivablesCollectedOtherCash,
+    totalReceivablesCollected: receivablesCollectedCash + receivablesCollectedOnline + receivablesCollectedOtherCash,
+    payablesPaidCash,
+    payablesPaidOnline,
+    payablesPaidOtherCash,
+    totalPayablesPaid: payablesPaidCash + payablesPaidOnline + payablesPaidOtherCash,
   };
 }

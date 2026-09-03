@@ -1,5 +1,6 @@
 import {
   Database,
+  HandCoins,
   History,
   Landmark,
   LayoutDashboard,
@@ -25,6 +26,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, theme
     { id: 'sales', label: 'Sales Records', icon: ShoppingBag },
     { id: 'expenses', label: 'Expense Page', icon: Receipt },
     { id: 'billing', label: 'Merchant Billing', icon: Landmark },
+    { id: 'receivables', label: 'Receivables & Payables', icon: HandCoins },
     { id: 'history', label: 'History Archives', icon: History },
   ];
 

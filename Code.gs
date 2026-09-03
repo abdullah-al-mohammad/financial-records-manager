@@ -3,6 +3,8 @@ const PAYMENTS_SHEET = 'BillPayments';
 const USERS_SHEET = 'Users';
 const AUDIT_SHEET = 'AuditLogs';
 const TRANSFERS_SHEET = 'Transfers';
+const RECEIVABLES_SHEET = 'Receivables';
+const PAYABLES_SHEET = 'Payables';
 
 const SECRET_KEY = 'financial-manager-secret-2026';
 const SESSION_LIFETIME_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -36,6 +38,8 @@ const PAYMENT_HEADERS = ['id', 'date', 'merchantName', 'paidAmount', 'notes'];
 const USER_HEADERS = ['username', 'passwordHash', 'role', 'status'];
 const AUDIT_HEADERS = ['id', 'timestamp', 'username', 'action', 'details'];
 const TRANSFER_HEADERS = ['id', 'date', 'amount', 'note'];
+const RECEIVABLE_HEADERS = ['id', 'name', 'amount', 'date', 'note', 'status', 'receivedAccount', 'receivedDate'];
+const PAYABLE_HEADERS = ['id', 'name', 'amount', 'date', 'note', 'status', 'paidAccount', 'paidDate'];
 
 function getOrCreateSheet(name, headers) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -93,6 +97,14 @@ function getAuditSheet() {
 
 function getTransfersSheet() {
   return getOrCreateSheet(TRANSFERS_SHEET, TRANSFER_HEADERS);
+}
+
+function getReceivablesSheet() {
+  return getOrCreateSheet(RECEIVABLES_SHEET, RECEIVABLE_HEADERS);
+}
+
+function getPayablesSheet() {
+  return getOrCreateSheet(PAYABLES_SHEET, PAYABLE_HEADERS);
 }
 
 // Helper: convert row array to object based on headers
@@ -740,6 +752,110 @@ function doPost(e) {
         user,
         'Delete bKash Transfer',
         `ID: ${id}, Amount: ৳${detailsObj.amount}`
+      );
+      return jsonResponse({ success: true });
+    }
+
+    // Receivable Actions (Money I Will Receive)
+    if (action === 'getReceivables') {
+      const sheet = getReceivablesSheet();
+      const data = sheet.getDataRange().getValues();
+      const receivables =
+        data.length <= 1 ? [] : data.slice(1).map(row => rowToObject(row, RECEIVABLE_HEADERS));
+      return jsonResponse({ success: true, receivables });
+    }
+
+    if (action === 'createReceivable') {
+      const sheet = getReceivablesSheet();
+      if (!receivable.id) receivable.id = 'rec_' + new Date().getTime().toString();
+      if (!receivable.status) receivable.status = 'Not Received';
+      sheet.appendRow(objectToRow(receivable, RECEIVABLE_HEADERS));
+      logAudit(
+        user,
+        'Create Receivable',
+        `ID: ${receivable.id}, Name: ${receivable.name}, Amount: ৳${receivable.amount}`
+      );
+      return jsonResponse({ success: true, id: receivable.id });
+    }
+
+    if (action === 'updateReceivable') {
+      const sheet = getReceivablesSheet();
+      const row = findRowById(sheet, receivable.id, RECEIVABLE_HEADERS);
+      if (row === -1) return jsonResponse({ success: false, error: 'Receivable not found' });
+      sheet
+        .getRange(row, 1, 1, RECEIVABLE_HEADERS.length)
+        .setValues([objectToRow(receivable, RECEIVABLE_HEADERS)]);
+      logAudit(
+        user,
+        'Update Receivable',
+        `ID: ${receivable.id}, Name: ${receivable.name}, Status: ${receivable.status}`
+      );
+      return jsonResponse({ success: true });
+    }
+
+    if (action === 'deleteReceivable') {
+      const sheet = getReceivablesSheet();
+      const row = findRowById(sheet, id, RECEIVABLE_HEADERS);
+      if (row === -1) return jsonResponse({ success: false, error: 'Receivable not found' });
+      const detailsRow = sheet.getRange(row, 1, 1, RECEIVABLE_HEADERS.length).getValues()[0];
+      const detailsObj = rowToObject(detailsRow, RECEIVABLE_HEADERS);
+      sheet.deleteRow(row);
+      logAudit(
+        user,
+        'Delete Receivable',
+        `ID: ${id}, Name: ${detailsObj.name}, Amount: ৳${detailsObj.amount}`
+      );
+      return jsonResponse({ success: true });
+    }
+
+    // Payable Actions (Money I Owe)
+    if (action === 'getPayables') {
+      const sheet = getPayablesSheet();
+      const data = sheet.getDataRange().getValues();
+      const payables =
+        data.length <= 1 ? [] : data.slice(1).map(row => rowToObject(row, PAYABLE_HEADERS));
+      return jsonResponse({ success: true, payables });
+    }
+
+    if (action === 'createPayable') {
+      const sheet = getPayablesSheet();
+      if (!payable.id) payable.id = 'pay_' + new Date().getTime().toString();
+      if (!payable.status) payable.status = 'Unpaid';
+      sheet.appendRow(objectToRow(payable, PAYABLE_HEADERS));
+      logAudit(
+        user,
+        'Create Payable',
+        `ID: ${payable.id}, Name: ${payable.name}, Amount: ৳${payable.amount}`
+      );
+      return jsonResponse({ success: true, id: payable.id });
+    }
+
+    if (action === 'updatePayable') {
+      const sheet = getPayablesSheet();
+      const row = findRowById(sheet, payable.id, PAYABLE_HEADERS);
+      if (row === -1) return jsonResponse({ success: false, error: 'Payable not found' });
+      sheet
+        .getRange(row, 1, 1, PAYABLE_HEADERS.length)
+        .setValues([objectToRow(payable, PAYABLE_HEADERS)]);
+      logAudit(
+        user,
+        'Update Payable',
+        `ID: ${payable.id}, Name: ${payable.name}, Status: ${payable.status}`
+      );
+      return jsonResponse({ success: true });
+    }
+
+    if (action === 'deletePayable') {
+      const sheet = getPayablesSheet();
+      const row = findRowById(sheet, id, PAYABLE_HEADERS);
+      if (row === -1) return jsonResponse({ success: false, error: 'Payable not found' });
+      const detailsRow = sheet.getRange(row, 1, 1, PAYABLE_HEADERS.length).getValues()[0];
+      const detailsObj = rowToObject(detailsRow, PAYABLE_HEADERS);
+      sheet.deleteRow(row);
+      logAudit(
+        user,
+        'Delete Payable',
+        `ID: ${id}, Name: ${detailsObj.name}, Amount: ৳${detailsObj.amount}`
       );
       return jsonResponse({ success: true });
     }

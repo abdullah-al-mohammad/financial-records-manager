@@ -8,6 +8,7 @@ import Dashboard from './components/Dashboard';
 import ExpenseManager from './components/ExpenseManager';
 import HistoryManager from './components/HistoryManager';
 import Login from './components/Login';
+import ReceivableManager from './components/ReceivableManager';
 import SalesManager from './components/SalesManager';
 import Sidebar from './components/Sidebar';
 import { api, clearSession, getCurrentSession } from './utils/api';
@@ -19,6 +20,8 @@ export default function App() {
   const [payments, setPayments] = useState([]);
   const [merchants, setMerchants] = useState([]);
   const [transfers, setTransfers] = useState([]);
+  const [receivables, setReceivables] = useState([]);
+  const [payables, setPayables] = useState([]);
 
   // Edit target bridging from Expense to Sales
   const [editTarget, setEditTarget] = useState(null);
@@ -90,6 +93,8 @@ export default function App() {
     setPayments([]);
     setMerchants([]);
     setTransfers([]);
+    setReceivables([]);
+    setPayables([]);
 
     setActiveTab('dashboard');
   }, []);
@@ -99,16 +104,20 @@ export default function App() {
     if (!currentUser) return;
     setLoading(true);
     try {
-      const [recordsList, paymentsList, merchantsList, transfersList] = await Promise.all([
+      const [recordsList, paymentsList, merchantsList, transfersList, receivablesList, payablesList] = await Promise.all([
         api.getAllRecords(),
         api.getAllPayments(),
         api.getMerchants(),
         api.getAllTransfers(),
+        api.getAllReceivables(),
+        api.getAllPayables(),
       ]);
       setRecords(recordsList);
       setPayments(paymentsList);
       setMerchants(merchantsList);
       setTransfers(transfersList);
+      setReceivables(receivablesList);
+      setPayables(payablesList);
     } catch (err) {
       showToast(`Network Sync Error: ${err.message}`, 'error');
     } finally {
@@ -273,6 +282,106 @@ export default function App() {
     }
   };
 
+  // Receivable Operations (CRUD)
+  const handleAddReceivable = async receivable => {
+    setLoading(true);
+    try {
+      const resp = await api.createReceivable(receivable);
+      if (resp.success) {
+        showToast('Receivable record logged successfully!');
+        await fetchData();
+      }
+    } catch (err) {
+      showToast(`Creation Failed: ${err.message}`, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateReceivable = async receivable => {
+    setLoading(true);
+    try {
+      const resp = await api.updateReceivable(receivable);
+      if (resp.success) {
+        if (receivable.status === 'Received') {
+          showToast(`Payment received and deposited to cash balance!`);
+        } else {
+          showToast('Receivable record updated!');
+        }
+        await fetchData();
+      }
+    } catch (err) {
+      showToast(`Update Failed: ${err.message}`, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteReceivable = async id => {
+    setLoading(true);
+    try {
+      const resp = await api.deleteReceivable(id);
+      if (resp.success) {
+        showToast('Receivable record removed.');
+        await fetchData();
+      }
+    } catch (err) {
+      showToast(`Deletion Failed: ${err.message}`, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Payable Operations (CRUD)
+  const handleAddPayable = async payable => {
+    setLoading(true);
+    try {
+      const resp = await api.createPayable(payable);
+      if (resp.success) {
+        showToast('Payable record logged successfully!');
+        await fetchData();
+      }
+    } catch (err) {
+      showToast(`Creation Failed: ${err.message}`, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdatePayable = async payable => {
+    setLoading(true);
+    try {
+      const resp = await api.updatePayable(payable);
+      if (resp.success) {
+        if (payable.status === 'Paid') {
+          showToast(`Payment recorded! Deducted from cash balance.`);
+        } else {
+          showToast('Payable record updated!');
+        }
+        await fetchData();
+      }
+    } catch (err) {
+      showToast(`Update Failed: ${err.message}`, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeletePayable = async id => {
+    setLoading(true);
+    try {
+      const resp = await api.deletePayable(id);
+      if (resp.success) {
+        showToast('Payable record removed.');
+        await fetchData();
+      }
+    } catch (err) {
+      showToast(`Deletion Failed: ${err.message}`, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Bridge navigation from Expense logs to Sales drawer edit (legacy — no longer used)
   const clearEditTarget = () => {
     setEditTarget(null);
@@ -292,6 +401,8 @@ export default function App() {
             records={records}
             payments={payments}
             transfers={transfers}
+            receivables={receivables}
+            payables={payables}
             setActiveTab={setActiveTab}
             onAddTransfer={handleAddTransfer}
             onDeleteTransfer={handleDeleteTransfer}
@@ -332,6 +443,19 @@ export default function App() {
             onAddPayment={handleAddPayment}
             onUpdatePayment={handleUpdatePayment}
             onDeletePayment={handleDeletePayment}
+          />
+        );
+      case 'receivables':
+        return (
+          <ReceivableManager
+            receivables={receivables}
+            onAddReceivable={handleAddReceivable}
+            onUpdateReceivable={handleUpdateReceivable}
+            onDeleteReceivable={handleDeleteReceivable}
+            payables={payables}
+            onAddPayable={handleAddPayable}
+            onUpdatePayable={handleUpdatePayable}
+            onDeletePayable={handleDeletePayable}
           />
         );
       case 'history':

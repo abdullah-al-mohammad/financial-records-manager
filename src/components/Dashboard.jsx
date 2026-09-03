@@ -3,6 +3,7 @@ import {
   ArrowRightLeft,
   CreditCard,
   DollarSign,
+  HandCoins,
   Landmark,
   Minus,
   PiggyBank,
@@ -24,6 +25,8 @@ export default function Dashboard({
   records,
   payments,
   transfers = [],
+  receivables = [],
+  payables = [],
   setActiveTab,
   onAddTransfer,
   onDeleteTransfer,
@@ -45,8 +48,8 @@ export default function Dashboard({
 
 
   const balanceSummary = useMemo(
-    () => computeNetCashBalance(records, payments || [], transfers || []),
-    [records, payments, transfers]
+    () => computeNetCashBalance(records, payments || [], transfers || [], receivables || [], payables || []),
+    [records, payments, transfers, receivables, payables]
   );
 
   // Transfer modal state
@@ -135,6 +138,32 @@ export default function Dashboard({
       merchantTotals,
     };
   }, [records, payments]);
+
+  // Outstanding receivables awaiting collection
+  const pendingReceivables = useMemo(() => {
+    let total = 0;
+    let count = 0;
+    receivables.forEach(r => {
+      if (r.status !== 'Received') {
+        total += parseFloat(r.amount) || 0;
+        count += 1;
+      }
+    });
+    return { total, count };
+  }, [receivables]);
+
+  // Outstanding payables awaiting payment (money owed to others)
+  const pendingPayables = useMemo(() => {
+    let total = 0;
+    let count = 0;
+    payables.forEach(p => {
+      if (p.status !== 'Paid') {
+        total += parseFloat(p.amount) || 0;
+        count += 1;
+      }
+    });
+    return { total, count };
+  }, [payables]);
 
   // MoM Aggregation (Last 5 active months)
   const momData = useMemo(() => {
@@ -481,8 +510,8 @@ export default function Dashboard({
           })}
         </div>
 
-        {/* Extra Cards Row (Dues and Other Cash) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Extra Cards Row (Dues, Pending Receivables, Pending Payables, and Other Cash) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="glass-panel border border-rose-500/15 rounded-2xl p-5 flex items-center justify-between shadow-lg shadow-rose-500/5">
             <div className="flex items-center gap-4">
               <div className="p-3.5 rounded-2xl bg-rose-500/10 text-rose-400">
@@ -505,6 +534,50 @@ export default function Dashboard({
             </button>
           </div>
 
+          <div className="glass-panel border border-amber-500/15 rounded-2xl p-5 flex items-center justify-between shadow-lg shadow-amber-500/5">
+            <div className="flex items-center gap-4">
+              <div className="p-3.5 rounded-2xl bg-amber-500/10 text-amber-400">
+                <HandCoins className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Pending Receivables
+                </span>
+                <span className="text-xl font-bold text-white tracking-tight block mt-1">
+                  ৳{pendingReceivables.total.toLocaleString()}
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={() => setActiveTab('receivables')}
+              className="text-[11px] font-bold text-amber-400 hover:text-amber-300 py-1.5 px-3 rounded-lg bg-amber-500/5 hover:bg-amber-500/10 transition-all cursor-pointer"
+            >
+              Collect
+            </button>
+          </div>
+
+          <div className="glass-panel border border-red-500/15 rounded-2xl p-5 flex items-center justify-between shadow-lg shadow-red-500/5">
+            <div className="flex items-center gap-4">
+              <div className="p-3.5 rounded-2xl bg-red-500/10 text-red-400">
+                <Receipt className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Pending Payables
+                </span>
+                <span className="text-xl font-bold text-white tracking-tight block mt-1">
+                  ৳{pendingPayables.total.toLocaleString()}
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={() => setActiveTab('receivables')}
+              className="text-[11px] font-bold text-red-400 hover:text-red-300 py-1.5 px-3 rounded-lg bg-red-500/5 hover:bg-red-500/10 transition-all cursor-pointer"
+            >
+              Pay Now
+            </button>
+          </div>
+
           <div className="glass-panel border border-indigo-500/15 rounded-2xl p-5 flex items-center justify-between shadow-lg shadow-indigo-500/5">
             <div className="flex items-center gap-4">
               <div className="p-3.5 rounded-2xl bg-indigo-500/10 text-indigo-400">
@@ -523,7 +596,7 @@ export default function Dashboard({
               onClick={() => setActiveTab('sales')}
               className="text-[11px] font-bold text-indigo-400 hover:text-indigo-300 py-1.5 px-3 rounded-lg bg-indigo-500/5 hover:bg-indigo-500/10 transition-all cursor-pointer"
             >
-              View Cash sources
+              View Sources
             </button>
           </div>
         </div>

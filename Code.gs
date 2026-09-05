@@ -432,6 +432,24 @@ function doGet(e) {
       return jsonResponse({ success: true }, callback);
     }
 
+    // Receivable Actions (Money I Will Receive)
+    if (action === 'getReceivables') {
+      const sheet = getReceivablesSheet();
+      const data = sheet.getDataRange().getValues();
+      const receivables =
+        data.length <= 1 ? [] : data.slice(1).map(row => rowToObject(row, RECEIVABLE_HEADERS));
+      return jsonResponse({ success: true, receivables }, callback);
+    }
+
+    // Payable Actions (Money I Owe)
+    if (action === 'getPayables') {
+      const sheet = getPayablesSheet();
+      const data = sheet.getDataRange().getValues();
+      const payables =
+        data.length <= 1 ? [] : data.slice(1).map(row => rowToObject(row, PAYABLE_HEADERS));
+      return jsonResponse({ success: true, payables }, callback);
+    }
+
     if (action === 'getMerchants') {
       const sheet = getSheet();
       const data = sheet.getDataRange().getValues();
@@ -574,6 +592,8 @@ function doPost(e) {
       record,
       payment,
       transfer,
+      receivable,
+      payable,
       id,
       user: userPayload,
       targetUsername,

@@ -344,6 +344,44 @@ function makeJsonpRequest(action, payload = {}) {
   });
 }
 
+// POST request helper (uses fetch, sends JSON body)
+async function makePostRequest(action, payload = {}) {
+  const scriptUrl = getScriptUrl();
+  if (!scriptUrl) {
+    return Promise.reject(new Error('Google Apps Script URL is not configured.'));
+  }
+
+  // Build request body with action and optional session token
+  const session = getCurrentSession();
+  const body = { action, ...payload };
+  if (session?.sessionToken) {
+    body.sessionToken = session.sessionToken;
+  }
+
+  try {
+    const response = await fetch(scriptUrl, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+    const json = await response.json();
+    if (json && json.success) {
+      return json;
+    }
+    const errorMsg = json?.error || 'Operation failed on backend.';
+    if (
+      String(errorMsg).toLowerCase().includes('unauthorized') ||
+      String(errorMsg).toLowerCase().includes('session invalid') ||
+      String(errorMsg).toLowerCase().includes('expired')
+    ) {
+      window.dispatchEvent(new CustomEvent('session-expired'));
+    }
+    return Promise.reject(new Error(errorMsg));
+  } catch (err) {
+    return Promise.reject(new Error(err?.message || 'Network request failed.'));
+  }
+}
+
+
 // Main API Object
 export const api = {
   // --- AUTHENTICATION ---
@@ -632,7 +670,7 @@ export const api = {
 
   async createReceivable(receivable) {
     if (isLiveMode()) {
-      return makeJsonpRequest('createReceivable', { receivable });
+      return makePostRequest('createReceivable', { receivable });
     } else {
       await new Promise(r => setTimeout(r, 150));
       const list = mockDb.get('receivables', null) || DEFAULT_RECEIVABLES;
@@ -657,7 +695,7 @@ export const api = {
 
   async updateReceivable(receivable) {
     if (isLiveMode()) {
-      return makeJsonpRequest('updateReceivable', { receivable });
+      return makePostRequest('updateReceivable', { receivable });
     } else {
       await new Promise(r => setTimeout(r, 150));
       const list = mockDb.get('receivables', null) || DEFAULT_RECEIVABLES;
@@ -681,7 +719,7 @@ export const api = {
 
   async deleteReceivable(id) {
     if (isLiveMode()) {
-      return makeJsonpRequest('deleteReceivable', { id });
+      return makePostRequest('deleteReceivable', { id });
     } else {
       await new Promise(r => setTimeout(r, 150));
       const list = mockDb.get('receivables', null) || DEFAULT_RECEIVABLES;

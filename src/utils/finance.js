@@ -98,11 +98,17 @@ export function computeNetCashBalance(records, payments, transfers = [], receiva
 
   receivables.forEach(rec => {
     const isReceived = rec.status === 'Received' || rec.paymentStatus === 'Received';
-    if (!isReceived) return;
+    if (!isReceived) {
+      // Not yet received — deduct from Hand Cash to reflect outstanding money owed to you
+      const pendingAmt = parseFloat(rec.amount) || 0;
+      if (pendingAmt > 0) cashExpenses += pendingAmt;
+      return;
+    }
 
     const amt = parseFloat(rec.amount) || 0;
     if (amt <= 0) return;
 
+    // Received: money has arrived in the designated account.
     const targetAccount = String(rec.receivedAccount || rec.paymentMethod || 'cash').toLowerCase().trim();
     if (targetAccount === 'other_cash' || targetAccount === 'other cash') {
       otherCashCollected += amt;
@@ -111,8 +117,10 @@ export function computeNetCashBalance(records, payments, transfers = [], receiva
       onlineCollected += amt;
       receivablesCollectedOnline += amt;
     } else {
-      cashCollected += amt;
-      receivablesCollectedCash += amt;
+      // cash account
+      // When status changes from Not Received to Received,
+      // the previous cashExpenses deduction disappears,
+      // which already increases cash by the receivable amount.
     }
   });
 

@@ -757,7 +757,7 @@ export const api = {
 
   async createPayable(payable) {
     if (isLiveMode()) {
-      return makeJsonpRequest('createPayable', { payable });
+      return makePostRequest('createPayable', { payable });
     } else {
       await new Promise(r => setTimeout(r, 150));
       const list = mockDb.get('payables', null) || DEFAULT_PAYABLES;
@@ -782,7 +782,7 @@ export const api = {
 
   async updatePayable(payable) {
     if (isLiveMode()) {
-      return makeJsonpRequest('updatePayable', { payable });
+      return makePostRequest('updatePayable', { payable });
     } else {
       await new Promise(r => setTimeout(r, 150));
       const list = mockDb.get('payables', null) || DEFAULT_PAYABLES;
@@ -806,7 +806,7 @@ export const api = {
 
   async deletePayable(id) {
     if (isLiveMode()) {
-      return makeJsonpRequest('deletePayable', { id });
+      return makePostRequest('deletePayable', { id });
     } else {
       await new Promise(r => setTimeout(r, 150));
       const list = mockDb.get('payables', null) || DEFAULT_PAYABLES;

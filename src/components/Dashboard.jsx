@@ -363,17 +363,17 @@ export default function Dashboard({
           </div>
 
           {/* Quick Action Buttons */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2.5">
             <button
               onClick={() => setActiveTab('sales')}
-              className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white px-3.5 py-2 rounded-xl text-xs font-semibold shadow-md shadow-indigo-600/10 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 btn-primary-gradient px-4 py-2 rounded-xl text-xs font-semibold shadow-md active:scale-[0.98] transition-all cursor-pointer"
             >
               <PlusCircle className="w-3.5 h-3.5" />
               Add Record
             </button>
             <button
               onClick={() => setActiveTab('billing')}
-              className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 hover:border-slate-700 active:scale-[0.98] text-slate-300 px-3.5 py-2 rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer"
+              className="flex items-center gap-1.5 glass-panel border border-slate-800 hover:border-slate-700 active:scale-[0.98] text-slate-300 px-3.5 py-2 rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer"
             >
               <CreditCard className="w-3.5 h-3.5 text-slate-400" />
               Record Payment
@@ -386,10 +386,9 @@ export default function Dashboard({
               Transfer Funds
             </button>
 
-
             <button
               onClick={() => window.print()}
-              className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-white px-3.5 py-2 rounded-xl text-xs font-semibold shadow-md transition-all cursor-pointer"
+              className="flex items-center gap-1.5 glass-panel border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-white px-3.5 py-2 rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer"
             >
               <Printer className="w-3.5 h-3.5" />
               Print Page
@@ -398,42 +397,48 @@ export default function Dashboard({
         </div>
 
         {/* Financial Analytics Summary Table */}
-        <div className="glass-panel border border-slate-900 rounded-2xl overflow-hidden shadow-xl">
-          <div className="p-5 border-b border-slate-900">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-              System Financial Overview
-            </h2>
+        <div className="glass-panel border border-slate-800/80 rounded-2xl overflow-hidden shadow-2xl">
+          <div className="p-4.5 border-b border-slate-800/80 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-indigo-500" />
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                System Financial Overview
+              </h2>
+            </div>
+            <span className="badge-pill badge-indigo">
+              Live Summary
+            </span>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
+            <table className="modern-table">
               <thead>
-                <tr className="bg-slate-900/60 border-b border-slate-900 text-slate-400 font-bold">
-                  <th className="p-4 whitespace-nowrap">Gross Sales</th>
-                  <th className="p-4 whitespace-nowrap">Commission</th>
-                  <th className="p-4 whitespace-nowrap">Merchant Bills</th>
-                  <th className="p-4 whitespace-nowrap">Deliv. Charges</th>
-                  <th className="p-4 whitespace-nowrap">Customer Paid</th>
-                  <th className="p-4 whitespace-nowrap">Total Expenses</th>
+                <tr>
+                  <th>Gross Sales</th>
+                  <th>Commission</th>
+                  <th>Merchant Bills</th>
+                  <th>Deliv. Charges</th>
+                  <th>Customer Paid</th>
+                  <th>Total Expenses</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-900/40">
-                <tr className="hover:bg-slate-900/20 transition-all text-slate-300">
-                  <td className="p-4 whitespace-nowrap font-bold text-white">
+              <tbody>
+                <tr>
+                  <td className="font-bold text-white text-sm">
                     ৳{Math.round(stats.sales).toLocaleString()}
                   </td>
-                  <td className="p-4 whitespace-nowrap font-bold text-indigo-400">
+                  <td className="font-bold text-indigo-400 text-sm">
                     ৳{Math.round(stats.commission).toLocaleString()}
                   </td>
-                  <td className="p-4 whitespace-nowrap font-bold text-rose-400">
+                  <td className="font-bold text-rose-400 text-sm">
                     ৳{Math.round(stats.merchantBills).toLocaleString()}
                   </td>
-                  <td className="p-4 whitespace-nowrap font-bold text-cyan-400">
+                  <td className="font-bold text-cyan-400 text-sm">
                     ৳{Math.round(stats.delivery).toLocaleString()}
                   </td>
-                  <td className="p-4 whitespace-nowrap font-bold text-emerald-300">
+                  <td className="font-bold text-emerald-300 text-sm">
                     ৳{Math.round(stats.customerPaid).toLocaleString()}
                   </td>
-                  <td className="p-4 whitespace-nowrap font-bold text-red-400">
+                  <td className="font-bold text-rose-400 text-sm">
                     ৳{Math.round(stats.expenses).toLocaleString()}
                   </td>
                 </tr>
@@ -449,8 +454,8 @@ export default function Dashboard({
               title: 'Gross Sales Volume',
               value: `৳${stats.sales.toLocaleString()}`,
               icon: ShoppingBag,
-              glow: 'rgba(99, 102, 241, 0.05)',
-              accent: 'border-indigo-500/20',
+              glow: 'rgba(99, 102, 241, 0.08)',
+              accent: 'border-indigo-500/25',
               text: 'text-indigo-400',
               bg: 'bg-indigo-500/10',
               subtitle: 'Total transactions registered',
@@ -459,8 +464,8 @@ export default function Dashboard({
               title: 'Total Revenue (Income)',
               value: `৳${stats.income.toLocaleString()}`,
               icon: DollarSign,
-              glow: 'rgba(16, 185, 129, 0.05)',
-              accent: 'border-emerald-500/20',
+              glow: 'rgba(16, 185, 129, 0.08)',
+              accent: 'border-emerald-500/25',
               text: 'text-emerald-400',
               bg: 'bg-emerald-500/10',
               subtitle: 'Commissions + Delivery charges',
@@ -469,8 +474,8 @@ export default function Dashboard({
               title: 'Aggregate Overheads',
               value: `৳${stats.expenses.toLocaleString()}`,
               icon: Receipt,
-              glow: 'rgba(244, 63, 94, 0.05)',
-              accent: 'border-rose-500/20',
+              glow: 'rgba(244, 63, 94, 0.08)',
+              accent: 'border-rose-500/25',
               text: 'text-rose-400',
               bg: 'bg-rose-500/10',
               subtitle: 'Salaries, fixed & other expenses',
@@ -479,8 +484,8 @@ export default function Dashboard({
               title: 'Net Profit / Loss',
               value: `${stats.netProfit < 0 ? '-' : ''}৳${Math.abs(stats.netProfit).toLocaleString()}`,
               icon: stats.netProfit >= 0 ? TrendingUp : TrendingDown,
-              glow: stats.netProfit >= 0 ? 'rgba(16, 185, 129, 0.05)' : 'rgba(244, 63, 94, 0.05)',
-              accent: stats.netProfit >= 0 ? 'border-emerald-500/20' : 'border-rose-500/20',
+              glow: stats.netProfit >= 0 ? 'rgba(16, 185, 129, 0.08)' : 'rgba(244, 63, 94, 0.08)',
+              accent: stats.netProfit >= 0 ? 'border-emerald-500/25' : 'border-rose-500/25',
               text: stats.netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400',
               bg: stats.netProfit >= 0 ? 'bg-emerald-500/10' : 'bg-rose-500/10',
               subtitle: 'Net income minus expenses',
@@ -490,14 +495,14 @@ export default function Dashboard({
             return (
               <div
                 key={i}
-                className={`glass-panel rounded-2xl p-5 border ${c.accent} relative overflow-hidden transition-all duration-300 hover:border-slate-700`}
-                style={{ boxShadow: `0 8px 32px 0 rgba(0, 0, 0, 0.2), 0 0 16px ${c.glow}` }}
+                className={`glass-panel glass-card-hover rounded-2xl p-5 border ${c.accent} relative overflow-hidden`}
+                style={{ boxShadow: `0 8px 32px 0 rgba(0, 0, 0, 0.25), 0 0 16px ${c.glow}` }}
               >
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                     {c.title}
                   </span>
-                  <div className={`p-2 rounded-xl ${c.bg} ${c.text}`}>
+                  <div className={`p-2.5 rounded-xl ${c.bg} ${c.text}`}>
                     <Icon className="w-4 h-4" />
                   </div>
                 </div>

@@ -251,28 +251,33 @@ export default function SalesManager({
       {/* Top Section */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-white">Sales Records</h1>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-xl font-bold tracking-tight text-white">Sales Records</h1>
+            <span className="badge-pill badge-indigo">
+              {filteredRecords.length} {filteredRecords.length === 1 ? 'Entry' : 'Entries'}
+            </span>
+          </div>
           <p className="text-xs text-slate-400 mt-1">
-            Browse, input, or export financial transactions
+            Browse, input, or export financial sales transactions with live ledger balance sync
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
               showFilters
-                ? 'bg-slate-900 border-slate-700 text-white'
-                : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                ? 'bg-slate-800/80 border-indigo-500/40 text-white shadow-md shadow-indigo-950/20'
+                : 'glass-panel border-slate-800/80 text-slate-400 hover:text-slate-200 hover:border-slate-700'
             }`}
           >
-            <SlidersHorizontal className="w-3.5 h-3.5" />
+            <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-400" />
             Filters
           </button>
 
           <button
             onClick={handleOpenNew}
-            className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-lg shadow-indigo-600/10 active:scale-[0.98] transition-all cursor-pointer"
+            className="flex items-center gap-2 btn-primary-gradient px-4 py-2 rounded-xl text-xs font-semibold shadow-lg active:scale-[0.98] transition-all cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             New Entry
@@ -282,26 +287,26 @@ export default function SalesManager({
 
       {/* Advanced Filters */}
       {(showFilters || searchTerm) && (
-        <div className="glass-panel border border-slate-900 rounded-2xl p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="glass-panel border border-slate-800/80 rounded-2xl p-4.5 grid grid-cols-1 sm:grid-cols-3 gap-3 shadow-lg">
           <div className="relative">
-            <Search className="absolute left-3.5 top-2.5 w-4 h-4 text-slate-500" />
+            <Search className="absolute left-3.5 top-2.5 w-4 h-4 text-slate-400" />
             <input
               type="text"
               placeholder="Search merchant or rider..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full bg-slate-950/80 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl pl-10 pr-3.5 py-2 text-xs text-white placeholder-slate-600 outline-none transition-all"
+              className="w-full bg-slate-950/60 border border-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 rounded-xl pl-10 pr-3.5 py-2 text-xs text-white placeholder-slate-500 outline-none transition-all"
             />
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
               Month
             </span>
             <select
               value={filterMonth}
               onChange={e => setFilterMonth(e.target.value)}
-              className="flex-1 bg-slate-950/80 border border-slate-800 focus:border-indigo-500 rounded-xl px-3 py-2 text-xs text-white outline-none"
+              className="flex-1 bg-slate-950/60 border border-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 rounded-xl px-3 py-2 text-xs text-white outline-none transition-all cursor-pointer"
             >
               <option value="All">All Months</option>
               {MONTHS.map(m => (
@@ -313,13 +318,13 @@ export default function SalesManager({
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
               Type
             </span>
             <select
               value={filterType}
               onChange={e => setFilterType(e.target.value)}
-              className="flex-1 bg-slate-950/80 border border-slate-800 focus:border-indigo-500 rounded-xl px-3 py-2 text-xs text-white outline-none"
+              className="flex-1 bg-slate-950/60 border border-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 rounded-xl px-3 py-2 text-xs text-white outline-none transition-all cursor-pointer"
             >
               <option value="All">All Types</option>
               {SALES_TYPES.map(t => (
@@ -333,28 +338,28 @@ export default function SalesManager({
       )}
 
       {/* Records Table */}
-      <div className="glass-panel border border-slate-900 rounded-2xl overflow-hidden shadow-xl">
+      <div className="glass-panel border border-slate-800/80 rounded-2xl overflow-hidden shadow-2xl">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
+          <table className="modern-table">
             <thead>
-              <tr className="bg-slate-900/60 border-b border-slate-900 text-slate-400 font-bold">
-                <th className="p-4 whitespace-nowrap">Date</th>
-                <th className="p-4 whitespace-nowrap">Merchant</th>
-                <th className="p-4 whitespace-nowrap">Sales Amt</th>
-                <th className="p-4 whitespace-nowrap">Com. Amt</th>
-                <th className="p-4 whitespace-nowrap">Bill Amount</th>
-                <th className="p-4 whitespace-nowrap">Discount</th>
-                <th className="p-4 whitespace-nowrap">Delivery</th>
-                <th className="p-4 whitespace-nowrap">Other Cash</th>
-                <th className="p-4 whitespace-nowrap">Payment Method</th>
-                <th className="p-4 whitespace-nowrap">Paid by Cust</th>
-                <th className="p-4 whitespace-nowrap text-center">Actions</th>
+              <tr>
+                <th>Date</th>
+                <th>Merchant</th>
+                <th>Sales Amt</th>
+                <th>Com. Amt</th>
+                <th>Bill Amount</th>
+                <th>Discount</th>
+                <th>Delivery</th>
+                <th>Other Cash</th>
+                <th>Payment Method</th>
+                <th>Paid by Cust</th>
+                <th className="text-center">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-900/40">
+            <tbody>
               {filteredRecords.length === 0 ? (
                 <tr>
-                  <td colSpan="9" className="p-8 text-center text-slate-500 font-medium">
+                  <td colSpan="11" className="p-10 text-center text-slate-500 font-medium">
                     No transactions found matching the parameters.
                   </td>
                 </tr>
@@ -363,11 +368,12 @@ export default function SalesManager({
                   const isRecTransfer =
                     r.salesType === 'Hand Cash to Online Transfer' ||
                     r.salesType === 'Online to Hand Cash Transfer';
+                  const isCash = !r.digitalPaymentMethod || r.digitalPaymentMethod.toLowerCase() === 'cash';
                   return (
-                    <tr key={r.id} className="hover:bg-slate-900/20 transition-all text-slate-300">
-                      <td className="p-4 whitespace-nowrap font-medium text-slate-400">
+                    <tr key={r.id} className="text-slate-300">
+                      <td className="font-medium text-slate-400">
                         <span className="flex items-center gap-1.5">
-                          <Calendar className="w-3.5 h-3.5 text-slate-600" />
+                          <Calendar className="w-3.5 h-3.5 text-indigo-400/70" />
                           {new Date(r.date).toLocaleString([], {
                             year: 'numeric',
                             month: 'short',
@@ -377,55 +383,59 @@ export default function SalesManager({
                           })}
                         </span>
                       </td>
-                      <td className="p-4 whitespace-nowrap font-bold text-white">
+                      <td className="font-bold text-white">
                         {isRecTransfer ? (
-                          <span className="text-pink-400">{r.salesType}</span>
+                          <span className="badge-pill badge-rose">{r.salesType}</span>
                         ) : (
                           r.merchantName || '—'
                         )}
                       </td>
-                      <td className="p-4 whitespace-nowrap font-semibold text-emerald-400">
+                      <td className="font-bold text-emerald-400">
                         ৳{Number(r.salesAmount || 0).toLocaleString()}
                       </td>
-                      <td className="p-4 whitespace-nowrap text-slate-400">
+                      <td className="text-slate-300">
                         {isRecTransfer ? (
                           '—'
                         ) : (
                           <>
-                            ৳{Number(r.commissionAmount || 0).toLocaleString()}
-                            <span className="text-[10px] text-slate-600 ml-1">
+                            <span className="font-semibold text-slate-200">
+                              ৳{Number(r.commissionAmount || 0).toLocaleString()}
+                            </span>
+                            <span className="text-[10px] text-slate-500 ml-1 font-mono">
                               ({r.commissionPercent}%)
                             </span>
                           </>
                         )}
                       </td>
-                      <td className="p-4 whitespace-nowrap font-semibold text-indigo-400">
+                      <td className="font-bold text-indigo-400">
                         {isRecTransfer ? '—' : `৳${Number(r.merchantBill || 0).toLocaleString()}`}
                       </td>
-                      <td className="p-4 whitespace-nowrap text-slate-400">
+                      <td className="text-slate-300">
                         {isRecTransfer || !r.discountPercent ? (
                           '—'
                         ) : (
                           <>
                             ৳{Number(r.discountAmount || 0).toLocaleString()}
-                            <span className="text-[10px] text-slate-600 ml-1">
+                            <span className="text-[10px] text-slate-500 ml-1 font-mono">
                               ({r.discountPercent}%)
                             </span>
                           </>
                         )}
                       </td>
-                      <td className="p-4 whitespace-nowrap text-slate-400">
+                      <td className="text-slate-300 font-medium">
                         {isRecTransfer || !r.deliveryCharge
                           ? '—'
                           : `৳${Number(r.deliveryCharge).toLocaleString()}`}
                       </td>
-                      <td className="p-4 whitespace-nowrap text-slate-400">
+                      <td className="text-slate-300">
                         {isRecTransfer ||
                         !(r.otherCashAmount && parseFloat(r.otherCashAmount) > 0) ? (
                           '—'
                         ) : (
                           <>
-                            ৳{Number(r.otherCashAmount).toLocaleString()}
+                            <span className="font-semibold text-emerald-400">
+                              ৳{Number(r.otherCashAmount).toLocaleString()}
+                            </span>
                             {r.otherCashSource && (
                               <span className="text-[10px] text-slate-500 block">
                                 ({r.otherCashSource})
@@ -435,18 +445,26 @@ export default function SalesManager({
                         )}
                       </td>
 
-                      <td className="p-4 whitespace-nowrap text-slate-400">
-                        {isRecTransfer ? '—' : r.digitalPaymentMethod || 'Cash'}
+                      <td>
+                        {isRecTransfer ? (
+                          '—'
+                        ) : isCash ? (
+                          <span className="badge-pill badge-emerald">Cash</span>
+                        ) : (
+                          <span className="badge-pill badge-indigo">
+                            {r.digitalPaymentMethod}
+                          </span>
+                        )}
                       </td>
-                      <td className="p-4 whitespace-nowrap font-bold text-slate-200">
+                      <td className="font-bold text-slate-100">
                         {isRecTransfer ? '—' : `৳${Number(r.paidByCustomer || 0).toLocaleString()}`}
                       </td>
-                      <td className="p-4 whitespace-nowrap text-center">
+                      <td className="text-center">
                         <div className="flex items-center justify-center gap-1.5">
                           <button
                             onClick={() => handleOpenEdit(r)}
                             title="Edit Row"
-                            className="p-1.5 rounded-lg border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800 transition-all cursor-pointer"
+                            className="p-2 rounded-xl border border-slate-800 text-slate-400 hover:text-indigo-300 hover:bg-indigo-500/10 hover:border-indigo-500/30 transition-all cursor-pointer"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
@@ -457,7 +475,7 @@ export default function SalesManager({
                               }
                             }}
                             title="Delete Row"
-                            className="p-1.5 rounded-lg border border-slate-800 text-slate-500 hover:text-rose-400 hover:bg-rose-500/5 transition-all cursor-pointer"
+                            className="p-2 rounded-xl border border-slate-800 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/30 transition-all cursor-pointer"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>

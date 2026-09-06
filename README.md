@@ -2,6 +2,8 @@
 
 A modern, high-performance financial management and bookkeeping web application designed for businesses, merchant logistics, and daily cash flow tracking. Features an ultra-sleek **Glassmorphism 2.0** interface with real-time Google Sheets backend synchronization via Google Apps Script.
 
+![Project Screenshot](./screenshots/dashboard.png)
+
 ---
 
 ## 🌟 Key Features

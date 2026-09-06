@@ -126,6 +126,40 @@ financial-record/
 
 ---
 
+## 📖 English Quick Guide (User Manual)
+
+### 1. 📊 Financial Dashboard
+- **Monitor Executive KPIs**: View Gross Sales Volume, Total Revenue (commissions + delivery), Total Overheads, and Net Profit/Loss.
+- **System Overview**: Check live totals across gross sales, merchant bills, customer payments, and operational expenses.
+- **Fund Transfer**: Click **"Transfer Funds"** to easily move money between **Hand Cash** and **Online Cash** (e.g. depositing collected physical cash into a bank or mobile wallet).
+- **Printable Reports**: Click **"Print Page"** to generate a clean, print-ready document formatted for audits and records.
+
+### 2. 🛍️ Sales Records
+- **Add New Entry**: Click **"+ New Entry"** to open the side drawer form.
+- **Form Inputs**: Enter transaction date & time, cycle month, merchant name, sales amount, commission %, discounts, and delivery charges.
+- **Payment Method**: Specify whether the customer paid in **Cash** or via digital methods (**bKash**, **Nagad**, **Bank**, etc.).
+- **Search & Filters**: Toggle **"Filters"** to isolate transactions by month, transaction type, or keywords (rider or merchant).
+
+### 3. 📥 Receivables (Money You Will Receive)
+- **Add Record**: Navigate to the **"Receivables & Payables"** page, select the **"Receivables"** subtab, and click **"+ Add Receivable"**.
+- **Record Information**: Enter the debtor/client name, expected amount, due date, and optional notes.
+- **Mark as Received**: When the money is collected, click the green **"Receive"** button. Select the target deposit account (**Hand Cash**, **Online Cash**, or **Other Cash**). The balance will instantly update.
+
+### 4. 📤 Payables (Debts & Money You Owe)
+- **Add Debt Record**: On the **"Receivables & Payables"** page, switch to the **"Payables"** subtab and click **"+ Add Payable"**.
+- **Record Information**: Enter the supplier or person name, amount owed, date, and description. Status is initially set to **Unpaid**.
+- **Settle Debt ("Pay Now")**: Click the red **"Pay Now"** button next to any unpaid row. Confirm the prompt and select which cash balance will fund the payment. The amount is deducted from the selected cash account and marked **Paid** (with double-payment prevention).
+
+### 5. 🏛️ Merchant Billing & Payouts
+- **Track Dues**: Open **"Merchant Billing"** to inspect outstanding liabilities per merchant partner.
+- **Record Payout**: Click **"Record Payment"** to log merchant bill settlements and reduce outstanding balances.
+
+### 6. 🎨 Theme & Interface Style
+- In the lower section of the sidebar, find the **Interface Style** panel.
+- Choose **Light**, **Dark**, or **Auto** (which synchronizes with your device's system appearance).
+
+---
+
 ## 🇧🇩 সংক্ষেপে নির্দেশিকা (বাংলায়)
 
 - **সেলস রেকর্ড**: দৈনিক বিক্রয়, ডিসকাউন্ট, ডেলিভারি চার্জ এবং কাস্টমার পেমেন্ট এন্ট্রি করুন।

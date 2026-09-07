@@ -1,6 +1,7 @@
 import {
   Activity,
   ArrowRightLeft,
+  Coins,
   CreditCard,
   DollarSign,
   HandCoins,
@@ -62,10 +63,15 @@ export default function Dashboard({
 
 
   const paymentTotals = useMemo(() => {
+    const cash = parseFloat(balanceSummary?.cashBalance) || 0;
+    const online = parseFloat(balanceSummary?.onlineBalance) || 0;
+    const otherCash = parseFloat(balanceSummary?.otherCashBalance) || 0;
+    const totalCash = cash + online + otherCash;
     return {
-      cash: balanceSummary.cashBalance,
-      online: balanceSummary.onlineBalance,
-      otherCash: balanceSummary.otherCashBalance || 0,
+      cash,
+      online,
+      otherCash,
+      totalCash,
     };
   }, [balanceSummary]);
 
@@ -606,73 +612,140 @@ export default function Dashboard({
           </div>
         </div>
 
-        {/* Extra Cards Row (Cash vs Other Cash Payments) */}
-        {/* Extra Cards Row (Cash vs Online vs Other Cash Payments) */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="glass-panel border border-amber-500/15 rounded-2xl p-5 flex items-center justify-between shadow-lg shadow-amber-500/5">
-            <div className="flex items-center gap-4">
-              <div className="p-3.5 rounded-2xl bg-amber-500/10 text-amber-400">
-                <PiggyBank className="w-5 h-5" />
+        {/* Total Cash Summary Section (Total Cash = Hand Cash + Online Cash + Other Cash) */}
+        <div className="glass-panel border border-indigo-500/25 rounded-3xl p-6 shadow-2xl relative overflow-hidden">
+          {/* Subtle Ambient Background Glows */}
+          <div className="absolute -right-20 -top-20 w-72 h-72 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -left-20 -bottom-20 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+          {/* Hero Header: Prominent Total Cash Display */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-slate-800/70 relative z-10">
+            <div className="flex items-start sm:items-center gap-4">
+              <div className="p-3.5 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-600/25 shrink-0">
+                <Wallet className="w-7 h-7" />
               </div>
               <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                  Hand Cash Balance
-                </span>
-                <span className="text-xl font-bold text-white tracking-tight block mt-1">
-                  ৳{paymentTotals.cash.toLocaleString()}
-                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Total Cash Balance
+                  </span>
+                  <span className="badge-pill badge-indigo text-[10px]">
+                    Combined Liquidity
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-baseline gap-2 mt-1">
+                  <span className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight">
+                    ৳{paymentTotals.totalCash.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                  </span>
+                  <span className="text-xs font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                    All Cash Reserves
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-1.5 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>
+                    Total Cash = <span className="text-amber-400 font-semibold">Hand Cash</span> + <span className="text-violet-400 font-semibold">Online Cash</span> + <span className="text-emerald-400 font-semibold">Other Cash</span>
+                  </span>
+                </p>
               </div>
             </div>
-            <button
-              onClick={() => setActiveTab('sales')}
-              className="text-[11px] font-bold text-amber-400 hover:text-amber-300 py-1.5 px-3 rounded-lg bg-amber-500/5 hover:bg-amber-500/10 transition-all cursor-pointer"
-            >
-              View Details
-            </button>
+
+            {/* Quick Actions */}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowTransferModal(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/30 text-violet-300 text-xs font-semibold active:scale-[0.98] transition-all cursor-pointer shadow-sm"
+              >
+                <ArrowRightLeft className="w-3.5 h-3.5" />
+                Transfer Funds
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('sales')}
+                className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl glass-panel border border-slate-800 hover:border-slate-700 text-slate-300 text-xs font-semibold active:scale-[0.98] transition-all cursor-pointer shadow-sm"
+              >
+                View Ledger
+              </button>
+            </div>
           </div>
 
-          <div className="glass-panel border border-violet-500/15 rounded-2xl p-5 flex items-center justify-between shadow-lg shadow-violet-500/5">
-            <div className="flex items-center gap-4">
-              <div className="p-3.5 rounded-2xl bg-violet-500/10 text-violet-400">
-                <CreditCard className="w-5 h-5" />
+          {/* Individual Cash Breakdown Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-6 relative z-10">
+            {/* Hand Cash */}
+            <div className="glass-panel glass-card-hover border border-amber-500/20 rounded-2xl p-5 relative overflow-hidden group">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  Hand Cash
+                </span>
+                <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
+                  <PiggyBank className="w-4 h-4" />
+                </div>
               </div>
-              <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                  Online Cash Balance
+              <div className="mt-3">
+                <span className="text-2xl font-bold text-white tracking-tight block">
+                  ৳{paymentTotals.cash.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                 </span>
-                <span className="text-xl font-bold text-white tracking-tight block mt-1">
-                  ৳{paymentTotals.online.toLocaleString()}
-                </span>
+                <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1.5 pt-1.5 border-t border-slate-800/60">
+                  <span>Physical in-hand cash</span>
+                  <span className="font-bold text-amber-400 font-mono text-[10px]">
+                    {paymentTotals.totalCash > 0
+                      ? `${((Math.max(0, paymentTotals.cash) / paymentTotals.totalCash) * 100).toFixed(1)}%`
+                      : '—'}
+                  </span>
+                </div>
               </div>
             </div>
-            <button
-              onClick={() => setActiveTab('sales')}
-              className="text-[11px] font-bold text-violet-400 hover:text-violet-300 py-1.5 px-3 rounded-lg bg-violet-500/5 hover:bg-violet-500/10 transition-all cursor-pointer"
-            >
-              View Details
-            </button>
-          </div>
 
-          <div className="glass-panel border border-emerald-500/15 rounded-2xl p-5 flex items-center justify-between shadow-lg shadow-emerald-500/5">
-            <div className="flex items-center gap-4">
-              <div className="p-3.5 rounded-2xl bg-emerald-500/10 text-emerald-400">
-                <Wallet className="w-5 h-5" />
+            {/* Online Cash */}
+            <div className="glass-panel glass-card-hover border border-violet-500/20 rounded-2xl p-5 relative overflow-hidden group">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  Online Cash
+                </span>
+                <div className="p-2 rounded-xl bg-violet-500/10 text-violet-400">
+                  <CreditCard className="w-4 h-4" />
+                </div>
               </div>
-              <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                  Other Cash Balance
+              <div className="mt-3">
+                <span className="text-2xl font-bold text-white tracking-tight block">
+                  ৳{paymentTotals.online.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                 </span>
-                <span className="text-xl font-bold text-white tracking-tight block mt-1">
-                  ৳{paymentTotals.otherCash.toLocaleString()}
-                </span>
+                <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1.5 pt-1.5 border-t border-slate-800/60">
+                  <span>Bank &amp; digital accounts</span>
+                  <span className="font-bold text-violet-400 font-mono text-[10px]">
+                    {paymentTotals.totalCash > 0
+                      ? `${((Math.max(0, paymentTotals.online) / paymentTotals.totalCash) * 100).toFixed(1)}%`
+                      : '—'}
+                  </span>
+                </div>
               </div>
             </div>
-            <button
-              onClick={() => setActiveTab('sales')}
-              className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 py-1.5 px-3 rounded-lg bg-emerald-500/5 hover:bg-emerald-500/10 transition-all cursor-pointer"
-            >
-              View Details
-            </button>
+
+            {/* Other Cash */}
+            <div className="glass-panel glass-card-hover border border-emerald-500/20 rounded-2xl p-5 relative overflow-hidden group">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  Other Cash
+                </span>
+                <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
+                  <Coins className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-3">
+                <span className="text-2xl font-bold text-white tracking-tight block">
+                  ৳{paymentTotals.otherCash.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                </span>
+                <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1.5 pt-1.5 border-t border-slate-800/60">
+                  <span>Auxiliary / petty reserve</span>
+                  <span className="font-bold text-emerald-400 font-mono text-[10px]">
+                    {paymentTotals.totalCash > 0
+                      ? `${((Math.max(0, paymentTotals.otherCash) / paymentTotals.totalCash) * 100).toFixed(1)}%`
+                      : '—'}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 

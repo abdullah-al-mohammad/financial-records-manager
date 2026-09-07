@@ -18,7 +18,7 @@ import {
   X,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { formatDisplayDate, toDateKey } from '../utils/dates';
+import { formatDisplayDate, sortRecordsNewestFirst, toDateKey } from '../utils/dates';
 
 const ACCOUNT_LABELS = {
   cash: {
@@ -198,82 +198,68 @@ export default function ReceivableManager({
 
   // Filtered List
   const filteredRecords = useMemo(() => {
-    return receivables
-      .filter(r => {
-        // Status filter
-        if (statusFilter === 'pending' && r.status === 'Received') return false;
-        if (statusFilter === 'received' && r.status !== 'Received') return false;
+    return sortRecordsNewestFirst(
+      receivables
+        .filter(r => {
+          // Status filter
+          if (statusFilter === 'pending' && r.status === 'Received') return false;
+          if (statusFilter === 'received' && r.status !== 'Received') return false;
 
-        // Account filter (applies to received)
-        if (accountFilter !== 'all') {
-          if (r.status !== 'Received') return false;
-          const acc = String(r.receivedAccount || 'cash')
-            .toLowerCase()
-            .trim();
-          if (acc !== accountFilter) return false;
-        }
+          // Account filter (applies to received)
+          if (accountFilter !== 'all') {
+            if (r.status !== 'Received') return false;
+            const acc = String(r.receivedAccount || 'cash')
+              .toLowerCase()
+              .trim();
+            if (acc !== accountFilter) return false;
+          }
 
-        // Search query
-        if (searchQuery.trim()) {
-          const q = searchQuery.toLowerCase().trim();
-          const nameMatch = String(r.name || '')
-            .toLowerCase()
-            .includes(q);
-          const noteMatch = String(r.note || '')
-            .toLowerCase()
-            .includes(q);
-          const amtMatch = String(r.amount || '').includes(q);
-          if (!nameMatch && !noteMatch && !amtMatch) return false;
-        }
+          // Search query
+          if (searchQuery.trim()) {
+            const q = searchQuery.toLowerCase().trim();
+            const nameMatch = String(r.name || '')
+              .toLowerCase()
+              .includes(q);
+            const noteMatch = String(r.note || '')
+              .toLowerCase()
+              .includes(q);
+            const amtMatch = String(r.amount || '').includes(q);
+            if (!nameMatch && !noteMatch && !amtMatch) return false;
+          }
 
-        return true;
-      })
-      .sort((a, b) => {
-        // Pending first, then by date descending
-        if (a.status !== b.status) {
-          return a.status === 'Not Received' ? -1 : 1;
-        }
-        const dateA = toDateKey(a.date) || '';
-        const dateB = toDateKey(b.date) || '';
-        return dateB.localeCompare(dateA);
-      });
+          return true;
+        })
+    );
   }, [receivables, statusFilter, accountFilter, searchQuery]);
 
   // Payable filtered list — payables filter এবং sort করা হচ্ছে
   const filteredPayables = useMemo(() => {
-    return payables
-      .filter(p => {
-        // Status filter: unpaid শুধু দেখাবে, paid শুধু দেখাবে, অথবা all
-        if (payStatusFilter === 'unpaid' && p.status === 'Paid') return false;
-        if (payStatusFilter === 'paid' && p.status !== 'Paid') return false;
+    return sortRecordsNewestFirst(
+      payables
+        .filter(p => {
+          // Status filter: unpaid শুধু দেখাবে, paid শুধু দেখাবে, অথবা all
+          if (payStatusFilter === 'unpaid' && p.status === 'Paid') return false;
+          if (payStatusFilter === 'paid' && p.status !== 'Paid') return false;
 
-        // Account filter: শুধু paid records-এ apply হবে
-        if (payAccountFilter !== 'all') {
-          if (p.status !== 'Paid') return false;
-          const acc = String(p.paidAccount || 'cash').toLowerCase().trim();
-          if (acc !== payAccountFilter) return false;
-        }
+          // Account filter: শুধু paid records-এ apply হবে
+          if (payAccountFilter !== 'all') {
+            if (p.status !== 'Paid') return false;
+            const acc = String(p.paidAccount || 'cash').toLowerCase().trim();
+            if (acc !== payAccountFilter) return false;
+          }
 
-        // Search: নাম, নোট বা পরিমাণ দিয়ে খোঁজা যাবে
-        if (paySearchQuery.trim()) {
-          const q = paySearchQuery.toLowerCase().trim();
-          const nameMatch = String(p.name || '').toLowerCase().includes(q);
-          const noteMatch = String(p.note || '').toLowerCase().includes(q);
-          const amtMatch = String(p.amount || '').includes(q);
-          if (!nameMatch && !noteMatch && !amtMatch) return false;
-        }
+          // Search: নাম, নোট বা পরিমাণ দিয়ে খোঁজা যাবে
+          if (paySearchQuery.trim()) {
+            const q = paySearchQuery.toLowerCase().trim();
+            const nameMatch = String(p.name || '').toLowerCase().includes(q);
+            const noteMatch = String(p.note || '').toLowerCase().includes(q);
+            const amtMatch = String(p.amount || '').includes(q);
+            if (!nameMatch && !noteMatch && !amtMatch) return false;
+          }
 
-        return true;
-      })
-      .sort((a, b) => {
-        // Unpaid আগে দেখাবে (বকেয়া সবার আগে)
-        if (a.status !== b.status) {
-          return a.status === 'Unpaid' ? -1 : 1;
-        }
-        const dateA = toDateKey(a.date) || '';
-        const dateB = toDateKey(b.date) || '';
-        return dateB.localeCompare(dateA);
-      });
+          return true;
+        })
+    );
   }, [payables, payStatusFilter, payAccountFilter, paySearchQuery]);
 
   // Open Add Modal

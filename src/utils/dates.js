@@ -87,3 +87,32 @@ export function compareDates(a, b) {
 export function getCurrentMonthKey(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
+
+/**
+ * Sort a list of records so the most recently CREATED record appears first.
+ * Prefers the `createdAt` timestamp (newest first). Records without a
+ * `createdAt` fall back to their `date` (newest date first), which keeps
+ * legacy data grouped sensibly. Stable for records sharing a timestamp.
+ */
+export function sortRecordsNewestFirst(list) {
+  return [...(list || [])].sort((a, b) => {
+    const aTime = a?.createdAt ? new Date(a.createdAt).getTime() : null;
+    const bTime = b?.createdAt ? new Date(b.createdAt).getTime() : null;
+
+    // Prefer createdAt when both present
+    if (aTime != null && bTime != null) {
+      if (aTime !== bTime) return bTime - aTime;
+    } else if (aTime != null && bTime == null) {
+      return -1; // record with a creation time stays above legacy records
+    } else if (aTime == null && bTime != null) {
+      return 1;
+    }
+
+    // Fall back to record date (newest date first); break ties by id (stable)
+    const dateKey = (row, field) => (row && toDateKey(row[field])) || '';
+    const dateCmp = dateKey(b, 'date').localeCompare(dateKey(a, 'date'));
+    if (dateCmp !== 0) return dateCmp;
+
+    return String(b?.id || '').localeCompare(String(a?.id || ''));
+  });
+}

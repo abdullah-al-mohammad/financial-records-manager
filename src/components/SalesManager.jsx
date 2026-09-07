@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import DatePicker from 'react-datepicker';
 import { format } from 'date-fns';
 import { toast } from 'react-toastify';
+import { sortRecordsNewestFirst } from '../utils/dates';
 
 const MONTHS = [
   'January',
@@ -223,11 +224,13 @@ export default function SalesManager({
 
   const visibleRecords = useMemo(
     () =>
-      records.filter(
-        r =>
-          (parseFloat(r.salesAmount) || 0) > 0 ||
-          (parseFloat(r.deliveryCharge) || 0) > 0 ||
-          (parseFloat(r.otherCashAmount) || 0) > 0
+      sortRecordsNewestFirst(
+        records.filter(
+          r =>
+            (parseFloat(r.salesAmount) || 0) > 0 ||
+            (parseFloat(r.deliveryCharge) || 0) > 0 ||
+            (parseFloat(r.otherCashAmount) || 0) > 0
+        )
       ),
     [records]
   );

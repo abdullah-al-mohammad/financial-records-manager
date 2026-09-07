@@ -34,6 +34,7 @@ const RECORD_HEADERS = [
   'fixedExpenseName',
   'fixedExpense',
   'expenseDescription',
+  'createdAt',
 ];
 
 const PAYMENT_HEADERS = ['id', 'date', 'merchantName', 'paidAmount', 'notes'];
@@ -431,6 +432,7 @@ function doGet(e) {
     if (action === 'create') {
       const sheet = getSheet();
       if (!record.id) record.id = new Date().getTime().toString();
+      if (!record.createdAt) record.createdAt = new Date().toISOString();
       console.log(JSON.stringify(record));
       sheet.appendRow(objectToRow(record, RECORD_HEADERS));
       logAudit(
@@ -798,6 +800,7 @@ function doPost(e) {
     if (action === 'create') {
       const sheet = getSheet();
       if (!record.id) record.id = new Date().getTime().toString();
+      if (!record.createdAt) record.createdAt = new Date().toISOString();
       sheet.appendRow(objectToRow(record, RECORD_HEADERS));
       logAudit(
         user,

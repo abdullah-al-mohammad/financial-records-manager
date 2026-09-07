@@ -456,7 +456,7 @@ export const api = {
         if (!existing.some(r => r.id === id)) break;
         id = generateId();
       }
-      const newRecord = { ...record, id };
+      const newRecord = { ...record, id, createdAt: new Date().toISOString() };
       return await makeJsonpRequest('create', { record: newRecord });
     } else {
       await new Promise(r => setTimeout(r, 200));
@@ -467,6 +467,7 @@ export const api = {
           typeof crypto !== 'undefined' && crypto.randomUUID
             ? crypto.randomUUID()
             : `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        createdAt: new Date().toISOString(),
       };
       const updated = [...records, newRecord];
       // Remove any duplicate IDs (keep the latest entry)

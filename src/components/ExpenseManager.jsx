@@ -15,7 +15,7 @@ import { useMemo, useState } from 'react';
 import DatePicker from 'react-datepicker';
 import { format } from 'date-fns';
 import { toast } from 'react-toastify';
-import { getMonthFromDate } from '../utils/dates';
+import { getMonthFromDate, sortRecordsNewestFirst } from '../utils/dates';
 import { computeNetCashBalance, sumExpensesFromRecords } from '../utils/finance';
 import OverheadExpenses from './OverheadExpenses';
 
@@ -114,6 +114,7 @@ export default function ExpenseManager({
         list.push({
           id: `${r.id}_rider`,
           date: r.date,
+          createdAt: r.createdAt,
           month: r.month,
           merchantName: r.merchantName,
           category: 'Rider Wages',
@@ -128,6 +129,7 @@ export default function ExpenseManager({
         list.push({
           id: `${r.id}_other`,
           date: r.date,
+          createdAt: r.createdAt,
           month: r.month,
           merchantName: r.merchantName,
           category: 'Variable Overhead',
@@ -142,6 +144,7 @@ export default function ExpenseManager({
         list.push({
           id: `${r.id}_fixed`,
           date: r.date,
+          createdAt: r.createdAt,
           month: r.month,
           merchantName: r.merchantName,
           category: 'Fixed Cost',
@@ -153,7 +156,7 @@ export default function ExpenseManager({
       }
     });
 
-    return list.sort((a, b) => new Date(b.date) - new Date(a.date));
+    return sortRecordsNewestFirst(list);
   }, [records]);
 
   const filteredItems = useMemo(() => {

@@ -23,6 +23,7 @@ export default function App() {
   const [receivables, setReceivables] = useState([]);
   const [payables, setPayables] = useState([]);
   const [monthClosings, setMonthClosings] = useState([]);
+  const [openingBalances, setOpeningBalances] = useState([]);
 
   // Edit target bridging from Expense to Sales
   const [editTarget, setEditTarget] = useState(null);
@@ -97,6 +98,7 @@ export default function App() {
     setReceivables([]);
     setPayables([]);
     setMonthClosings([]);
+    setOpeningBalances([]);
 
     setActiveTab('dashboard');
   }, []);
@@ -106,7 +108,7 @@ export default function App() {
     if (!currentUser) return;
     setLoading(true);
     try {
-      const [recordsList, paymentsList, merchantsList, transfersList, receivablesList, payablesList, monthClosingsList] = await Promise.all([
+      const [recordsList, paymentsList, merchantsList, transfersList, receivablesList, payablesList, monthClosingsList, openingBalancesList] = await Promise.all([
         api.getAllRecords(),
         api.getAllPayments(),
         api.getMerchants(),
@@ -114,6 +116,7 @@ export default function App() {
         api.getAllReceivables(),
         api.getAllPayables(),
         api.getAllMonthClosings(),
+        api.getOpeningBalances(),
       ]);
       setRecords(recordsList);
       setPayments(paymentsList);
@@ -122,6 +125,7 @@ export default function App() {
       setReceivables(receivablesList);
       setPayables(payablesList);
       setMonthClosings(monthClosingsList);
+      setOpeningBalances(openingBalancesList);
     } catch (err) {
       showToast(`Network Sync Error: ${err.message}`, 'error');
     } finally {
@@ -386,6 +390,20 @@ export default function App() {
     }
   };
 
+  // Opening Balance Operations (one record per calendar month)
+  const handleSetOpeningBalance = async entry => {
+    setLoading(true);
+    try {
+      await api.setOpeningBalance(entry);
+      showToast('Opening balance saved successfully!');
+      await fetchData();
+    } catch (err) {
+      showToast(`Failed to save opening balance: ${err.message}`, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Month Closing Operations
   const handleAddMonthClosing = async entry => {
     setLoading(true);
@@ -416,15 +434,9 @@ export default function App() {
   const renderActiveTab = () => {
     switch (activeTab) {
       case 'dashboard': {
-        // Derive opening balance: find the most recent closing for the month BEFORE the current one
         const now = new Date();
         const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-        // Sort closings by monthKey descending, pick the latest one that is NOT the current month
-        const sortedClosings = [...monthClosings].sort((a, b) => b.monthKey.localeCompare(a.monthKey));
-        const prevClosing = sortedClosings.find(c => c.monthKey < currentMonthKey) || null;
-        const openingBalance = prevClosing
-          ? { handCash: prevClosing.handCash, onlineCash: prevClosing.onlineCash, otherCash: prevClosing.otherCash }
-          : null;
+        const currentOpening = openingBalances.find(o => o.monthKey === currentMonthKey) || null;
 
         return (
           <Dashboard
@@ -437,8 +449,10 @@ export default function App() {
             onAddTransfer={handleAddTransfer}
             onDeleteTransfer={handleDeleteTransfer}
             monthClosings={monthClosings}
-            openingBalance={openingBalance}
+            openingBalances={openingBalances}
+            currentOpeningBalance={currentOpening}
             onAddMonthClosing={handleAddMonthClosing}
+            onSetOpeningBalance={handleSetOpeningBalance}
           />
         );
       }

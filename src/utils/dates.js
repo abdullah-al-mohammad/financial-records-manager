@@ -83,3 +83,7 @@ export function compareDates(a, b) {
   const keyB = toDateKey(b) || '';
   return keyA.localeCompare(keyB);
 }
+
+export function getCurrentMonthKey(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}

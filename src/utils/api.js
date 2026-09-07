@@ -1,3 +1,5 @@
+import { getCurrentMonthKey } from './dates.js';
+
 const SCRIPT_URL_KEY = 'financial_manager_script_url';
 const SESSION_KEY = 'financial_manager_session';
 const LIVE_MODE_KEY = 'financial_manager_live_mode';
@@ -185,6 +187,7 @@ const mockDb = {
       this.set('receivables', DEFAULT_RECEIVABLES);
       this.set('payables', DEFAULT_PAYABLES);
       this.set('monthClosings', []);
+      this.set('openingBalances', []);
 
       const adminHash = await hashPassword('admin123');
       const userHash = await hashPassword('user123');
@@ -824,6 +827,131 @@ export const api = {
         `ID: ${id}, Name: ${target.name}, Amount: ৳${target.amount}`
       );
       return { success: true };
+    }
+  },
+
+  // --- OPENING BALANCES (One record per calendar month) ---
+  // Migrates the legacy single opening balance (fm_opening_balance) into the
+  // per-month collection as a manual entry for the current month.
+  _migrateLegacyOpeningBalance() {
+    try {
+      const raw = localStorage.getItem('fm_opening_balance');
+      if (!raw) return;
+      const legacy = JSON.parse(raw);
+      localStorage.removeItem('fm_opening_balance');
+      if (!legacy) return;
+
+      const list = mockDb.get('openingBalances', []);
+      const monthKey = getCurrentMonthKey();
+      if (list.some(o => o.monthKey === monthKey)) return;
+
+      const handCash = parseFloat(legacy.handCash) || 0;
+      const onlineCash = parseFloat(legacy.onlineCash) || 0;
+      const otherCash = parseFloat(legacy.otherCash) || 0;
+      const today = new Date();
+
+      list.push({
+        id: 'ob_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+        monthKey,
+        month: today.toLocaleString('default', { month: 'long' }),
+        year: today.getFullYear(),
+        handCash,
+        onlineCash,
+        otherCash,
+        totalCash: handCash + onlineCash + otherCash,
+        source: 'manual',
+        fromMonthKey: null,
+        createdAt: new Date().toISOString(),
+        createdBy: 'SYSTEM',
+      });
+      mockDb.set('openingBalances', list);
+      mockDb.logAudit('SYSTEM', 'Migrate Opening Balance', 'Legacy opening balance converted into monthly records');
+    } catch {
+      localStorage.removeItem('fm_opening_balance');
+    }
+  },
+
+  async getOpeningBalances() {
+    if (isLiveMode()) {
+      const resp = await makeJsonpRequest('getOpeningBalances');
+      return resp.openingBalances || [];
+    } else {
+      await new Promise(r => setTimeout(r, 100));
+      this._migrateLegacyOpeningBalance();
+      const list = mockDb.get('openingBalances', []);
+      // Keep a single record per month — if duplicates ever sneak in, keep the newest
+      return Array.from(new Map(list.map(o => [o.monthKey, o])).values());
+    }
+  },
+
+  async setOpeningBalance(entry) {
+    if (isLiveMode()) {
+      return makePostRequest('setOpeningBalance', { entry });
+    } else {
+      await new Promise(r => setTimeout(r, 150));
+      if (!entry || !entry.monthKey) throw new Error('Opening balance requires a month key.');
+
+      const currentMonthKey = getCurrentMonthKey();
+      // Previous months must remain unchanged
+      if (entry.monthKey < currentMonthKey) {
+        throw new Error('Opening balance for past months cannot be changed.');
+      }
+
+      const list = mockDb.get('openingBalances', []);
+      const handCash = parseFloat(entry.handCash) || 0;
+      const onlineCash = parseFloat(entry.onlineCash) || 0;
+      const otherCash = parseFloat(entry.otherCash) || 0;
+      const index = list.findIndex(o => o.monthKey === entry.monthKey);
+      const session = getCurrentSession();
+
+      let savedId;
+      if (index === -1) {
+        // Create — guaranteed one opening balance per month
+        const newEntry = {
+          id: 'ob_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+          monthKey: entry.monthKey,
+          month: entry.month || '',
+          year: entry.year || '',
+          handCash,
+          onlineCash,
+          otherCash,
+          totalCash: parseFloat(entry.totalCash) || handCash + onlineCash + otherCash,
+          source: entry.source === 'carried_forward' ? 'carried_forward' : 'manual',
+          fromMonthKey: entry.fromMonthKey || null,
+          createdAt: new Date().toISOString(),
+          createdBy: session?.username || 'admin',
+        };
+        list.push(newEntry);
+        savedId = newEntry.id;
+      } else {
+        // Update existing month record — no duplicates
+        const prev = list[index];
+        list[index] = {
+          ...prev,
+          month: entry.month || prev.month,
+          year: entry.year || prev.year,
+          handCash,
+          onlineCash,
+          otherCash,
+          totalCash: parseFloat(entry.totalCash) || handCash + onlineCash + otherCash,
+          source: entry.source === 'carried_forward' ? 'carried_forward' : prev.source || 'manual',
+          fromMonthKey: entry.fromMonthKey || prev.fromMonthKey || null,
+          updatedAt: new Date().toISOString(),
+        };
+        savedId = prev.id;
+      }
+
+      mockDb.set('openingBalances', list);
+
+      const sourceLabel = entry.source === 'carried_forward'
+        ? 'Carried Forward'
+        : 'Manual Entry';
+      mockDb.logAudit(
+        session?.username || 'admin',
+        'Set Opening Balance',
+        `Month: ${entry.monthKey} — Total: ৳${handCash + onlineCash + otherCash} (Hand: ৳${handCash}, Online: ৳${onlineCash}, Other: ৳${otherCash}) Source: ${sourceLabel}`
+      );
+      return { success: true, id: savedId };
     }
   },
 

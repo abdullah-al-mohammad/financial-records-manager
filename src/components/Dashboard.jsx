@@ -13,6 +13,7 @@ import {
   HandCoins,
   Landmark,
   Minus,
+  PencilLine,
   PiggyBank,
   PlusCircle,
   Printer,
@@ -38,8 +39,10 @@ export default function Dashboard({
   onAddTransfer,
   onDeleteTransfer,
   monthClosings = [],
-  openingBalance = null,
+  openingBalances = [],
+  currentOpeningBalance = null,
   onAddMonthClosing,
+  onSetOpeningBalance,
 }) {
   const MONTHS_ORDER = [
     'January',
@@ -56,10 +59,17 @@ export default function Dashboard({
     'December',
   ];
 
+  const monthNameFromKey = key => {
+    if (!key) return '';
+    const [, m] = String(key).split('-');
+    const idx = parseInt(m, 10) - 1;
+    return idx >= 0 && idx < MONTHS_ORDER.length ? MONTHS_ORDER[idx] : key;
+  };
+
 
   const balanceSummary = useMemo(
-    () => computeNetCashBalance(records, payments || [], transfers || [], receivables || [], payables || [], openingBalance),
-    [records, payments, transfers, receivables, payables, openingBalance]
+    () => computeNetCashBalance(records, payments || [], transfers || [], receivables || [], payables || [], currentOpeningBalance),
+    [records, payments, transfers, receivables, payables, currentOpeningBalance]
   );
 
   // Transfer modal state
@@ -75,6 +85,16 @@ export default function Dashboard({
   const [closeSubmitting, setCloseSubmitting] = useState(false);
   const [showClosingHistory, setShowClosingHistory] = useState(false);
 
+  // Opening Balance modal state (one record per calendar month)
+  const [showOpeningModal, setShowOpeningModal] = useState(false);
+  const [obHand, setObHand] = useState('');
+  const [obOnline, setObOnline] = useState('');
+  const [obOther, setObOther] = useState('');
+  const [obSource, setObSource] = useState('manual');
+  const [obFromMonthKey, setObFromMonthKey] = useState(null);
+  const [obSubmitting, setObSubmitting] = useState(false);
+  const [showOpeningHistory, setShowOpeningHistory] = useState(false);
+
   // Derive current month key and check if already closed
   const now = new Date();
   const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -83,7 +103,65 @@ export default function Dashboard({
   const isCurrentMonthClosed = monthClosings.some(c => c.monthKey === currentMonthKey);
 
   // Sorted closings (newest first) for history panel
-  const sortedClosings = [...monthClosings].sort((a, b) => b.monthKey.localeCompare(a.monthKey));
+  const sortedClosings = useMemo(
+    () => [...monthClosings].sort((a, b) => b.monthKey.localeCompare(a.monthKey)),
+    [monthClosings]
+  );
+
+  // Latest closing strictly before the current month — the carry-forward source
+  const previousMonthClosing = useMemo(
+    () => sortedClosings.find(c => c.monthKey < currentMonthKey) || null,
+    [sortedClosings, currentMonthKey]
+  );
+
+  // Opening balance source label for the current month
+  const openingSource = currentOpeningBalance
+    ? currentOpeningBalance.source === 'carried_forward'
+      ? 'carryforward'
+      : 'manual'
+    : null;
+
+  const openOpeningModal = () => {
+    setObSource(currentOpeningBalance?.source || 'manual');
+    setObFromMonthKey(currentOpeningBalance?.fromMonthKey || null);
+    setObHand(currentOpeningBalance?.handCash ?? '');
+    setObOnline(currentOpeningBalance?.onlineCash ?? '');
+    setObOther(currentOpeningBalance?.otherCash ?? '');
+    setShowOpeningModal(true);
+  };
+
+  const handleCarryForward = () => {
+    if (!previousMonthClosing) return;
+    setObHand(previousMonthClosing.handCash ?? '');
+    setObOnline(previousMonthClosing.onlineCash ?? '');
+    setObOther(previousMonthClosing.otherCash ?? '');
+    setObSource('carried_forward');
+    setObFromMonthKey(previousMonthClosing.monthKey);
+    setShowOpeningModal(true);
+  };
+
+  const handleSaveOpeningBalance = async () => {
+    const handCash = parseFloat(obHand) || 0;
+    const onlineCash = parseFloat(obOnline) || 0;
+    const otherCash = parseFloat(obOther) || 0;
+    setObSubmitting(true);
+    try {
+      await onSetOpeningBalance({
+        monthKey: currentMonthKey,
+        month: currentMonthName,
+        year: currentYear,
+        handCash,
+        onlineCash,
+        otherCash,
+        totalCash: handCash + onlineCash + otherCash,
+        source: obSource,
+        fromMonthKey: obFromMonthKey || null,
+      });
+      setShowOpeningModal(false);
+    } finally {
+      setObSubmitting(false);
+    }
+  };
 
   const handleCloseMonth = async () => {
     setCloseSubmitting(true);
@@ -697,6 +775,16 @@ export default function Dashboard({
 
             {/* Quick Actions */}
             <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {/* Set Opening Balance Button — always accessible */}
+              <button
+                type="button"
+                onClick={openOpeningModal}
+                className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 text-xs font-semibold active:scale-[0.98] transition-all cursor-pointer shadow-sm"
+              >
+                <PencilLine className="w-3.5 h-3.5" />
+                {currentOpeningBalance ? 'Edit Opening Balance' : 'Set Opening Balance'}
+              </button>
+
               {/* Close Month Button */}
               {isCurrentMonthClosed ? (
                 <span className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-emerald-600/15 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
@@ -809,20 +897,61 @@ export default function Dashboard({
             </div>
           </div>
 
-          {/* Opening Balance Banner — shown when a carry-forward balance is active */}
-          {openingBalance && (
+          {/* Opening Balance Banner — current month's saved opening record */}
+          {currentOpeningBalance && (
             <div className="mt-5 relative z-10 flex flex-wrap items-center gap-3 px-4 py-3 rounded-2xl bg-indigo-500/8 border border-indigo-500/20">
               <div className="p-1.5 rounded-lg bg-indigo-500/15 text-indigo-400 shrink-0">
                 <CalendarClock className="w-4 h-4" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[11px] font-bold text-indigo-300 uppercase tracking-wider">Carry-Forward Opening Balance Active</p>
+                <p className="text-[11px] font-bold text-indigo-300 uppercase tracking-wider">
+                  {openingSource === 'carryforward' ? 'Carried-Forward Opening Balance' : 'Manual Opening Balance'}
+                  <span className="normal-case font-medium text-slate-400"> — {currentMonthName} {currentYear}</span>
+                </p>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  Hand ৳{fmt(openingBalance.handCash)} · Online ৳{fmt(openingBalance.onlineCash)} · Other ৳{fmt(openingBalance.otherCash)}
-                  &nbsp;—&nbsp;added to current month totals
+                  Hand ৳{fmt(currentOpeningBalance.handCash)} · Online ৳{fmt(currentOpeningBalance.onlineCash)} · Other ৳{fmt(currentOpeningBalance.otherCash)}
+                  &nbsp;—&nbsp;added as this month's opening cash
                 </p>
               </div>
-              <span className="badge-pill badge-indigo text-[10px] shrink-0">From Previous Month</span>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="badge-pill badge-indigo text-[10px]">
+                  {openingSource === 'carryforward' ? 'Carried Forward from Previous Month' : 'Manual Entry'}
+                </span>
+                <button
+                  type="button"
+                  onClick={openOpeningModal}
+                  className="text-[10px] font-semibold text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer"
+                >
+                  Edit
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Carry-Forward Available Banner — previous month closed, no opening set for current month yet */}
+          {!currentOpeningBalance && previousMonthClosing && (
+            <div className="mt-5 relative z-10 flex flex-wrap items-center gap-3 px-4 py-3 rounded-2xl bg-amber-500/8 border border-amber-500/25">
+              <div className="p-1.5 rounded-lg bg-amber-500/15 text-amber-400 shrink-0">
+                <CalendarClock className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-bold text-amber-300 uppercase tracking-wider">
+                  Previous Month Closing Available
+                </p>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  {previousMonthClosing.month} {previousMonthClosing.year} closed with a total of ৳{fmt(previousMonthClosing.totalCash)}
+                  &nbsp;—&nbsp;carry it forward as {currentMonthName}'s opening balance?
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleCarryForward}
+                  className="text-[10px] font-bold text-amber-300 hover:text-amber-200 py-1.5 px-3 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition-all cursor-pointer"
+                >
+                  ✓ Carry Forward Previous Month
+                </button>
+              </div>
             </div>
           )}
 
@@ -878,6 +1007,75 @@ export default function Dashboard({
                           <td className="px-4 py-3 text-right text-slate-400">{c.closedBy || '—'}</td>
                         </tr>
                       ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Opening Balance History — collapsible accordion */}
+          {openingBalances.length > 0 && (
+            <div className="mt-3 relative z-10">
+              <button
+                type="button"
+                onClick={() => setShowOpeningHistory(v => !v)}
+                className="w-full flex items-center justify-between px-4 py-3 rounded-2xl bg-indigo-800/30 hover:bg-indigo-800/50 border border-indigo-700/40 transition-all cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <CalendarClock className="w-4 h-4 text-indigo-400" />
+                  <span className="text-xs font-semibold text-slate-300">Opening Balance History</span>
+                  <span className="badge-pill badge-indigo text-[10px]">{openingBalances.length} record{openingBalances.length !== 1 ? 's' : ''}</span>
+                </div>
+                {showOpeningHistory
+                  ? <ChevronUp className="w-4 h-4 text-slate-400" />
+                  : <ChevronDown className="w-4 h-4 text-slate-400" />}
+              </button>
+
+              {showOpeningHistory && (
+                <div className="mt-2 rounded-2xl overflow-hidden border border-indigo-700/40">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-slate-800/60">
+                        <th className="px-4 py-3 text-left font-semibold text-slate-400 uppercase tracking-wider text-[10px]">Month</th>
+                        <th className="px-4 py-3 text-right font-semibold text-amber-400 uppercase tracking-wider text-[10px]">Hand Cash</th>
+                        <th className="px-4 py-3 text-right font-semibold text-violet-400 uppercase tracking-wider text-[10px]">Online Cash</th>
+                        <th className="px-4 py-3 text-right font-semibold text-emerald-400 uppercase tracking-wider text-[10px]">Other Cash</th>
+                        <th className="px-4 py-3 text-right font-semibold text-white uppercase tracking-wider text-[10px]">Total</th>
+                        <th className="px-4 py-3 text-right font-semibold text-slate-400 uppercase tracking-wider text-[10px]">Source</th>
+                        <th className="px-4 py-3 text-right font-semibold text-slate-400 uppercase tracking-wider text-[10px]">Set By</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...openingBalances]
+                        .sort((a, b) => b.monthKey.localeCompare(a.monthKey))
+                        .map((o, idx) => (
+                          <tr key={o.id} className={idx % 2 === 0 ? 'bg-slate-900/30' : 'bg-slate-800/20'}>
+                            <td className="px-4 py-3 font-semibold text-slate-200">
+                              <div className="flex items-center gap-2">
+                                {o.monthKey === currentMonthKey && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                )}
+                                {o.month} {o.year}
+                              </div>
+                              <div className="text-[10px] text-slate-500 mt-0.5">
+                                {o.createdAt ? new Date(o.createdAt).toLocaleDateString() : ''}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-right font-mono text-amber-300">৳{fmt(o.handCash)}</td>
+                            <td className="px-4 py-3 text-right font-mono text-violet-300">৳{fmt(o.onlineCash)}</td>
+                            <td className="px-4 py-3 text-right font-mono text-emerald-300">৳{fmt(o.otherCash)}</td>
+                            <td className="px-4 py-3 text-right font-mono text-white font-bold">৳{fmt(o.totalCash)}</td>
+                            <td className="px-4 py-3 text-right">
+                              {o.source === 'carried_forward' ? (
+                                <span className="badge-pill badge-indigo text-[10px]">Carried Forward</span>
+                              ) : (
+                                <span className="badge-pill badge-amber text-[10px]">Manual Entry</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-right text-slate-400">{o.createdBy || '—'}</td>
+                          </tr>
+                        ))}
                     </tbody>
                   </table>
                 </div>
@@ -949,7 +1147,7 @@ export default function Dashboard({
 
               {/* Info note */}
               <p className="text-[11px] text-slate-400 bg-slate-800/40 rounded-xl px-4 py-3 mb-5 leading-relaxed">
-                💡 This closing balance will be saved as <strong className="text-slate-200">the opening cash for next month</strong>.
+                💡 This closing balance is snapshotted and will be available to <strong className="text-slate-200">carry forward as next month's opening cash</strong>.
                 &nbsp;This action cannot be undone and can only be done <strong className="text-slate-200">once per month</strong>.
               </p>
 
@@ -969,6 +1167,158 @@ export default function Dashboard({
                   className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white text-sm font-bold shadow-lg shadow-amber-900/30 disabled:opacity-60 disabled:cursor-not-allowed transition-all cursor-pointer active:scale-[0.98]"
                 >
                   {closeSubmitting ? 'Saving…' : `✓ Confirm &amp; Close Month`}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Opening Balance Modal (one record per month) ── */}
+        {showOpeningModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}
+            onClick={e => { if (e.target === e.currentTarget) setShowOpeningModal(false); }}
+          >
+            <div className="glass-panel border border-indigo-500/30 rounded-3xl p-6 w-full max-w-md shadow-2xl shadow-indigo-950/30 animate-in fade-in zoom-in-95 duration-200">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-indigo-500/15 text-indigo-400">
+                    <CalendarClock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white">Opening Balance — {currentMonthName} {currentYear}</h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Starting cash for this month</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowOpeningModal(false)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/50 transition-all cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Source badge */}
+              <div className="mb-4 flex items-center gap-2">
+                <span className={`badge-pill text-[10px] ${obSource === 'carried_forward' ? 'badge-indigo' : 'badge-amber'}`}>
+                  {obSource === 'carried_forward' ? 'Carried Forward from Previous Month' : 'Manual Entry'}
+                </span>
+                {obSource === 'carried_forward' && obFromMonthKey && (
+                  <span className="text-[10px] text-slate-500">
+                    from {monthNameFromKey(obFromMonthKey)}
+                  </span>
+                )}
+              </div>
+
+              {/* Carry Forward action row (only when previous month closing exists) */}
+              {previousMonthClosing && (
+                <button
+                  type="button"
+                  onClick={handleCarryForward}
+                  disabled={obSource === 'carried_forward'}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 mb-4 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-200 text-xs font-semibold transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <CalendarClock className="w-3.5 h-3.5" />
+                  {obSource === 'carried_forward'
+                    ? 'Pre-filled from Previous Month Closing'
+                    : 'Carry Forward Previous Month Closing'}
+                </button>
+              )}
+
+              {obSource === 'carried_forward' && previousMonthClosing && (
+                <p className="text-[11px] text-indigo-200/80 bg-indigo-500/8 border border-indigo-500/20 rounded-xl px-4 py-3 mb-4 leading-relaxed">
+                  Values pre-filled from <strong>{previousMonthClosing.month} {previousMonthClosing.year}</strong> closing
+                  (Total ৳{fmt(previousMonthClosing.totalCash)}). Review the amounts below — you can edit them before saving.
+                  This creates a separate opening balance record and will not book any income or cash transaction.
+                </p>
+              )}
+
+              {/* Amount fields */}
+              <div className="space-y-3 mb-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">Hand Cash (৳)</label>
+                  <div className="relative">
+                    <PiggyBank className="w-4 h-4 text-amber-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={obHand}
+                      onChange={e => setObHand(e.target.value)}
+                      placeholder="e.g. 20000"
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-sm text-white outline-none focus:border-indigo-500 transition-colors"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">Online Cash (৳)</label>
+                  <div className="relative">
+                    <CreditCard className="w-4 h-4 text-violet-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={obOnline}
+                      onChange={e => setObOnline(e.target.value)}
+                      placeholder="e.g. 15000"
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-sm text-white outline-none focus:border-indigo-500 transition-colors"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">Other Cash (৳)</label>
+                  <div className="relative">
+                    <Coins className="w-4 h-4 text-emerald-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={obOther}
+                      onChange={e => setObOther(e.target.value)}
+                      placeholder="e.g. 5000"
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-sm text-white outline-none focus:border-indigo-500 transition-colors"
+                    />
+                  </div>
+                </div>
+
+                {/* Total — auto-synced */}
+                <div className="flex items-center justify-between px-4 py-4 rounded-xl bg-gradient-to-r from-indigo-600/20 via-indigo-500/10 to-violet-600/20 border border-indigo-500/30">
+                  <div className="flex items-center gap-2 text-sm font-bold text-indigo-200">
+                    <Wallet className="w-4 h-4" />
+                    Total Opening Cash
+                  </div>
+                  <span className="text-xl font-extrabold font-mono text-white">
+                    ৳{fmt((parseFloat(obHand) || 0) + (parseFloat(obOnline) || 0) + (parseFloat(obOther) || 0))}
+                  </span>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-slate-400 bg-slate-800/40 rounded-xl px-4 py-3 mb-5 leading-relaxed">
+                ⚠️ Hand + Online + Other stay synchronized and the total updates automatically.
+                Only <strong className="text-slate-200">one opening balance per month</strong> is stored, and it
+                <strong className="text-slate-200"> does not affect</strong> income, expenses, sales, payables, or
+                receivable calculations.
+              </p>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowOpeningModal(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-700 text-slate-300 text-sm font-semibold hover:bg-slate-700/40 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveOpeningBalance}
+                  disabled={obSubmitting}
+                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-sm font-bold shadow-lg shadow-indigo-900/30 disabled:opacity-60 disabled:cursor-not-allowed transition-all cursor-pointer active:scale-[0.98]"
+                >
+                  {obSubmitting ? 'Saving…' : 'Save Opening Balance'}
                 </button>
               </div>
             </div>

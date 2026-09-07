@@ -5,6 +5,7 @@ const AUDIT_SHEET = 'AuditLogs';
 const TRANSFERS_SHEET = 'Transfers';
 const RECEIVABLES_SHEET = 'Receivables';
 const PAYABLES_SHEET = 'Payables';
+const OPENING_BALANCES_SHEET = 'OpeningBalances';
 
 const SECRET_KEY = 'financial-manager-secret-2026';
 const SESSION_LIFETIME_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -40,6 +41,7 @@ const AUDIT_HEADERS = ['id', 'timestamp', 'username', 'action', 'details'];
 const TRANSFER_HEADERS = ['id', 'date', 'amount', 'note'];
 const RECEIVABLE_HEADERS = ['id', 'name', 'amount', 'date', 'note', 'status', 'receivedAccount', 'receivedDate'];
 const PAYABLE_HEADERS = ['id', 'name', 'amount', 'date', 'note', 'status', 'paidAccount', 'paidDate'];
+const OPENING_BALANCE_HEADERS = ['id', 'monthKey', 'month', 'year', 'handCash', 'onlineCash', 'otherCash', 'totalCash', 'source', 'fromMonthKey', 'createdAt', 'createdBy'];
 
 function getOrCreateSheet(name, headers) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -105,6 +107,10 @@ function getReceivablesSheet() {
 
 function getPayablesSheet() {
   return getOrCreateSheet(PAYABLES_SHEET, PAYABLE_HEADERS);
+}
+
+function getOpeningBalancesSheet() {
+  return getOrCreateSheet(OPENING_BALANCES_SHEET, OPENING_BALANCE_HEADERS);
 }
 
 // Helper: convert row array to object based on headers
@@ -227,6 +233,82 @@ function findRowById(sheet, id, headers) {
   return -1;
 }
 
+// Find row index by a specific column value (e.g. monthKey)
+function findRowByKey(sheet, headers, column, value) {
+  const colIdx = headers.indexOf(column);
+  if (colIdx === -1) return -1;
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][colIdx]) === String(value)) return i + 1;
+  }
+  return -1;
+}
+
+function getOpeningBalancesList() {
+  const sheet = getOpeningBalancesSheet();
+  const data = sheet.getDataRange().getValues();
+  return data.length <= 1 ? [] : data.slice(1).map(row => rowToObject(row, OPENING_BALANCE_HEADERS));
+}
+
+function setOpeningBalanceEntry(entry, user) {
+  if (!entry || !entry.monthKey) throw new Error('Opening balance requires a month key.');
+
+  const currentMonth = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM');
+  // Previous months must remain unchanged
+  if (String(entry.monthKey) < currentMonth) {
+    throw new Error('Opening balance for past months cannot be changed.');
+  }
+
+  const sheet = getOpeningBalancesSheet();
+  const handCash = parseFloat(entry.handCash) || 0;
+  const onlineCash = parseFloat(entry.onlineCash) || 0;
+  const otherCash = parseFloat(entry.otherCash) || 0;
+
+  const rowIndex = findRowByKey(sheet, OPENING_BALANCE_HEADERS, 'monthKey', String(entry.monthKey));
+
+  // Preserve original metadata when updating an existing month record
+  let id = entry.id || 'ob_' + new Date().getTime().toString();
+  let createdAt = entry.createdAt || new Date().toISOString();
+  let createdBy = entry.createdBy || user;
+  if (rowIndex !== -1) {
+    const existingRow = sheet.getRange(rowIndex, 1, 1, OPENING_BALANCE_HEADERS.length).getValues()[0];
+    const existing = rowToObject(existingRow, OPENING_BALANCE_HEADERS);
+    if (existing.id && !entry.id) id = existing.id;
+    if (existing.createdAt && !entry.createdAt) createdAt = existing.createdAt;
+    if (existing.createdBy && !entry.createdBy) createdBy = existing.createdBy;
+  }
+
+  const entryObj = {
+    id,
+    monthKey: String(entry.monthKey),
+    month: entry.month || '',
+    year: entry.year || '',
+    handCash,
+    onlineCash,
+    otherCash,
+    totalCash: entry.totalCash ? Number(entry.totalCash) : handCash + onlineCash + otherCash,
+    source: entry.source === 'carried_forward' ? 'carried_forward' : 'manual',
+    fromMonthKey: entry.fromMonthKey || '',
+    createdAt,
+    createdBy,
+  };
+
+  const row = objectToRow(entryObj, OPENING_BALANCE_HEADERS);
+  if (rowIndex === -1) {
+    sheet.appendRow(row);
+  } else {
+    sheet.getRange(rowIndex, 1, 1, OPENING_BALANCE_HEADERS.length).setValues([row]);
+  }
+
+  const sourceLabel = entryObj.source === 'carried_forward' ? 'Carried Forward' : 'Manual Entry';
+  logAudit(
+    user,
+    'Set Opening Balance',
+    `Month: ${entryObj.monthKey} — Total: ৳${entryObj.totalCash} (Hand: ৳${handCash}, Online: ৳${onlineCash}, Other: ৳${otherCash}) Source: ${sourceLabel}`
+  );
+  return { success: true, id: entryObj.id };
+}
+
 // Handle GET request (JSONP / Fetch)
 function doGet(e) {
   const action = e.parameter.action;
@@ -235,6 +317,7 @@ function doGet(e) {
   const record = parseJsonParam(e.parameter.record);
   const payment = parseJsonParam(e.parameter.payment);
   const transfer = parseJsonParam(e.parameter.transfer);
+  const entry = parseJsonParam(e.parameter.entry);
   const id = e.parameter.id;
   const token = e.parameter.sessionToken;
 
@@ -450,6 +533,15 @@ function doGet(e) {
       return jsonResponse({ success: true, payables }, callback);
     }
 
+    // Opening Balance Actions (One record per calendar month)
+    if (action === 'getOpeningBalances') {
+      return jsonResponse({ success: true, openingBalances: getOpeningBalancesList() }, callback);
+    }
+
+    if (action === 'setOpeningBalance') {
+      return jsonResponse(setOpeningBalanceEntry(entry, user), callback);
+    }
+
     if (action === 'getMerchants') {
       const sheet = getSheet();
       const data = sheet.getDataRange().getValues();
@@ -594,6 +686,7 @@ function doPost(e) {
       transfer,
       receivable,
       payable,
+      entry,
       id,
       user: userPayload,
       targetUsername,
@@ -835,6 +928,15 @@ function doPost(e) {
       const payables =
         data.length <= 1 ? [] : data.slice(1).map(row => rowToObject(row, PAYABLE_HEADERS));
       return jsonResponse({ success: true, payables });
+    }
+
+    // Opening Balance Actions (One record per calendar month)
+    if (action === 'getOpeningBalances') {
+      return jsonResponse({ success: true, openingBalances: getOpeningBalancesList() });
+    }
+
+    if (action === 'setOpeningBalance') {
+      return jsonResponse(setOpeningBalanceEntry(entry, user));
     }
 
     if (action === 'createPayable') {

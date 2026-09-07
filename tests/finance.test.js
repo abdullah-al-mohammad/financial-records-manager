@@ -312,3 +312,63 @@ test('Accounting Rule: Unreceived receivables and unpaid payables do not alter c
   assert.equal(balance.netRemaining, 10000);
 });
 
+test('Opening balance carry-forward: Current Cash = Opening Cash + Cash In - Cash Out', () => {
+  const records = [
+    {
+      id: 'sale-cash',
+      salesAmount: '1000',
+      paidByCustomer: '1000',
+      digitalPaymentMethod: 'cash',
+    },
+    {
+      id: 'sale-online',
+      salesAmount: '2000',
+      paidByCustomer: '2000',
+      digitalPaymentMethod: 'bkash',
+    },
+    {
+      id: 'sale-other',
+      otherCashAmount: '500',
+    },
+  ];
+  // Previous month (September) closing record carried forward as October opening
+  const opening = {
+    handCash: 20000,
+    onlineCash: 15000,
+    otherCash: 5000,
+    totalCash: 40000,
+    source: 'carried_forward',
+    fromMonthKey: '2026-09',
+  };
+
+  const balance = computeNetCashBalance(records, [], [], [], [], opening);
+
+  assert.equal(balance.cashBalance, 20000 + 1000);
+  assert.equal(balance.onlineBalance, 15000 + 2000);
+  assert.equal(balance.otherCashBalance, 5000 + 500);
+  assert.equal(balance.netRemaining, 40000 + 1000 + 2000 + 500);
+});
+
+test('Without an opening balance record, opening cash is zero and monthly flows are unchanged', () => {
+  const records = [
+    {
+      id: 'sale-cash',
+      salesAmount: '1000',
+      paidByCustomer: '1000',
+      digitalPaymentMethod: 'cash',
+    },
+    {
+      id: 'expense',
+      riderSalary: '200',
+      paymentSource: 'cash',
+    },
+  ];
+
+  const balance = computeNetCashBalance(records, []);
+
+  assert.equal(balance.cashBalance, 800);
+  assert.equal(balance.onlineBalance, 0);
+  assert.equal(balance.otherCashBalance, 0);
+  assert.equal(balance.netRemaining, 800);
+});
+

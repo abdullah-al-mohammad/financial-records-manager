@@ -18,7 +18,7 @@ import {
   X,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { formatDisplayDate, sortRecordsNewestFirst, toDateKey } from '../utils/dates';
+import { formatDisplayDate, sortRecordsByDateDesc, toDateKey } from '../utils/dates';
 
 const ACCOUNT_LABELS = {
   cash: {
@@ -198,7 +198,7 @@ export default function ReceivableManager({
 
   // Filtered List
   const filteredRecords = useMemo(() => {
-    return sortRecordsNewestFirst(
+    return sortRecordsByDateDesc(
       receivables
         .filter(r => {
           // Status filter
@@ -234,7 +234,7 @@ export default function ReceivableManager({
 
   // Payable filtered list — payables filter এবং sort করা হচ্ছে
   const filteredPayables = useMemo(() => {
-    return sortRecordsNewestFirst(
+    return sortRecordsByDateDesc(
       payables
         .filter(p => {
           // Status filter: unpaid শুধু দেখাবে, paid শুধু দেখাবে, অথবা all

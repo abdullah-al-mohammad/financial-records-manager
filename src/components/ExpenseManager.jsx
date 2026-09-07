@@ -14,7 +14,7 @@ import { useMemo, useState } from 'react';
 import DatePicker from 'react-datepicker';
 import { format } from 'date-fns';
 import { toast } from 'react-toastify';
-import { getMonthFromDate, sortRecordsNewestFirst } from '../utils/dates';
+import { getMonthFromDate, sortRecordsByDateDesc } from '../utils/dates';
 import { computeNetCashBalance, sumExpensesFromRecords } from '../utils/finance';
 import OverheadExpenses from './OverheadExpenses';
 
@@ -155,7 +155,7 @@ export default function ExpenseManager({
       }
     });
 
-    return sortRecordsNewestFirst(list);
+    return sortRecordsByDateDesc(list);
   }, [records]);
 
   const filteredItems = useMemo(() => {

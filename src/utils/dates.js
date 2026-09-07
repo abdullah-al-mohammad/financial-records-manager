@@ -89,29 +89,22 @@ export function getCurrentMonthKey(date = new Date()) {
 }
 
 /**
- * Sort a list of records so the most recently CREATED record appears first.
- * Prefers the `createdAt` timestamp (newest first). Records without a
- * `createdAt` fall back to their `date` (newest date first), which keeps
- * legacy data grouped sensibly. Stable for records sharing a timestamp.
+ * Sort a list of records so the LATEST stored date appears first (date-wise
+ * descending, oldest below). Prefers the record's `date` field. Records
+ * sharing the same date are tied by `createdAt` (newest created first) so a
+ * freshly added record for today still lands on top; final tie is by id.
  */
-export function sortRecordsNewestFirst(list) {
+export function sortRecordsByDateDesc(list) {
   return [...(list || [])].sort((a, b) => {
+    const dateKey = (row) => (row && toDateKey(row.date)) || '';
+    const dateCmp = dateKey(b).localeCompare(dateKey(a));
+    if (dateCmp !== 0) return dateCmp;
+
     const aTime = a?.createdAt ? new Date(a.createdAt).getTime() : null;
     const bTime = b?.createdAt ? new Date(b.createdAt).getTime() : null;
-
-    // Prefer createdAt when both present
-    if (aTime != null && bTime != null) {
-      if (aTime !== bTime) return bTime - aTime;
-    } else if (aTime != null && bTime == null) {
-      return -1; // record with a creation time stays above legacy records
-    } else if (aTime == null && bTime != null) {
-      return 1;
-    }
-
-    // Fall back to record date (newest date first); break ties by id (stable)
-    const dateKey = (row, field) => (row && toDateKey(row[field])) || '';
-    const dateCmp = dateKey(b, 'date').localeCompare(dateKey(a, 'date'));
-    if (dateCmp !== 0) return dateCmp;
+    if (aTime != null && bTime != null && aTime !== bTime) return bTime - aTime;
+    if (aTime != null && bTime == null) return -1;
+    if (aTime == null && bTime != null) return 1;
 
     return String(b?.id || '').localeCompare(String(a?.id || ''));
   });

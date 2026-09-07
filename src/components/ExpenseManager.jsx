@@ -8,7 +8,6 @@ import {
   Settings,
   Trash2,
   UserCheck,
-  Wallet,
   X,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -295,28 +294,6 @@ export default function ExpenseManager({
           </span>
           <p className="text-2xl font-bold text-rose-400 mt-2">
             ৳{cashBalance.expenses.total.toLocaleString()}
-          </p>
-        </div>
-        <div className="glass-panel border border-slate-900 rounded-2xl p-5">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-            Other Cash Balance
-          </span>
-          <p className="text-2xl font-bold text-emerald-400 mt-2">
-            ৳{cashBalance.otherCashBalance.toLocaleString()}
-          </p>
-        </div>
-        <div className="glass-panel border border-amber-500/20 rounded-2xl p-5 bg-amber-500/5">
-          <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-            <Wallet className="w-3.5 h-3.5" />
-            Net Cash Remaining
-          </span>
-          <p
-            className={`text-2xl font-bold mt-2 ${cashBalance.netRemaining >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}
-          >
-            ৳{cashBalance.netRemaining.toLocaleString()}
-          </p>
-          <p className="text-[10px] text-slate-500 mt-1">
-            Cash in hand after expenses and merchant payouts
           </p>
         </div>
       </div>

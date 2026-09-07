@@ -6,6 +6,7 @@ const TRANSFERS_SHEET = 'Transfers';
 const RECEIVABLES_SHEET = 'Receivables';
 const PAYABLES_SHEET = 'Payables';
 const OPENING_BALANCES_SHEET = 'OpeningBalances';
+const MONTH_CLOSINGS_SHEET = 'MonthClosings';
 
 const SECRET_KEY = 'financial-manager-secret-2026';
 const SESSION_LIFETIME_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -42,6 +43,7 @@ const TRANSFER_HEADERS = ['id', 'date', 'amount', 'note'];
 const RECEIVABLE_HEADERS = ['id', 'name', 'amount', 'date', 'note', 'status', 'receivedAccount', 'receivedDate'];
 const PAYABLE_HEADERS = ['id', 'name', 'amount', 'date', 'note', 'status', 'paidAccount', 'paidDate'];
 const OPENING_BALANCE_HEADERS = ['id', 'monthKey', 'month', 'year', 'handCash', 'onlineCash', 'otherCash', 'totalCash', 'source', 'fromMonthKey', 'createdAt', 'createdBy'];
+const MONTH_CLOSING_HEADERS = ['id', 'monthKey', 'month', 'year', 'handCash', 'onlineCash', 'otherCash', 'totalCash', 'closedAt', 'createdBy'];
 
 function getOrCreateSheet(name, headers) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -111,6 +113,10 @@ function getPayablesSheet() {
 
 function getOpeningBalancesSheet() {
   return getOrCreateSheet(OPENING_BALANCES_SHEET, OPENING_BALANCE_HEADERS);
+}
+
+function getMonthClosingsSheet() {
+  return getOrCreateSheet(MONTH_CLOSINGS_SHEET, MONTH_CLOSING_HEADERS);
 }
 
 // Helper: convert row array to object based on headers
@@ -305,6 +311,50 @@ function setOpeningBalanceEntry(entry, user) {
     user,
     'Set Opening Balance',
     `Month: ${entryObj.monthKey} — Total: ৳${entryObj.totalCash} (Hand: ৳${handCash}, Online: ৳${onlineCash}, Other: ৳${otherCash}) Source: ${sourceLabel}`
+  );
+  return { success: true, id: entryObj.id };
+}
+
+function getMonthClosingsList() {
+  const sheet = getMonthClosingsSheet();
+  const data = sheet.getDataRange().getValues();
+  return data.length <= 1 ? [] : data.slice(1).map(row => rowToObject(row, MONTH_CLOSING_HEADERS));
+}
+
+function createMonthClosingEntry(entry, user) {
+  if (!entry || !entry.monthKey) throw new Error('Month closing requires a month key.');
+
+  const sheet = getMonthClosingsSheet();
+
+  // Duplicate guard — one closing per calendar month
+  const rowIndex = findRowByKey(sheet, MONTH_CLOSING_HEADERS, 'monthKey', String(entry.monthKey));
+  if (rowIndex !== -1) {
+    throw new Error(`Month "${entry.month} ${entry.year}" is already closed. Only one closing per month is allowed.`);
+  }
+
+  const handCash = parseFloat(entry.handCash) || 0;
+  const onlineCash = parseFloat(entry.onlineCash) || 0;
+  const otherCash = parseFloat(entry.otherCash) || 0;
+
+  const entryObj = {
+    id: entry.id || 'mc_' + new Date().getTime().toString(),
+    monthKey: String(entry.monthKey),
+    month: entry.month || '',
+    year: entry.year || '',
+    handCash,
+    onlineCash,
+    otherCash,
+    totalCash: entry.totalCash ? Number(entry.totalCash) : handCash + onlineCash + otherCash,
+    closedAt: entry.closedAt || new Date().toISOString(),
+    createdBy: entry.createdBy || user,
+  };
+
+  sheet.appendRow(objectToRow(entryObj, MONTH_CLOSING_HEADERS));
+
+  logAudit(
+    user,
+    'Month Closing',
+    `Closed ${entryObj.month} ${entryObj.year} — Total: ৳${entryObj.totalCash} (Hand: ৳${handCash}, Online: ৳${onlineCash}, Other: ৳${otherCash})`
   );
   return { success: true, id: entryObj.id };
 }
@@ -540,6 +590,11 @@ function doGet(e) {
 
     if (action === 'setOpeningBalance') {
       return jsonResponse(setOpeningBalanceEntry(entry, user), callback);
+    }
+
+    // Month Closing Actions
+    if (action === 'getMonthClosings') {
+      return jsonResponse({ success: true, monthClosings: getMonthClosingsList() }, callback);
     }
 
     if (action === 'getMerchants') {
@@ -937,6 +992,15 @@ function doPost(e) {
 
     if (action === 'setOpeningBalance') {
       return jsonResponse(setOpeningBalanceEntry(entry, user));
+    }
+
+    // Month Closing Actions
+    if (action === 'getMonthClosings') {
+      return jsonResponse({ success: true, monthClosings: getMonthClosingsList() });
+    }
+
+    if (action === 'createMonthClosing') {
+      return jsonResponse(createMonthClosingEntry(entry, user));
     }
 
     if (action === 'createPayable') {

@@ -346,8 +346,8 @@ export default function ExpenseManager({
             title: 'Variable Overheads',
             value: `৳${stats.variable.toLocaleString()}`,
             icon: AlertOctagon,
-            color: 'text-purple-400',
-            bg: 'bg-purple-500/10',
+            color: 'text-violet-400',
+            bg: 'bg-violet-500/10',
           },
         ].map((c, i) => {
           const Icon = c.icon;
@@ -386,7 +386,7 @@ export default function ExpenseManager({
               {[
                 { name: 'Rider Wages', value: stats.riders, color: 'bg-rose-500' },
                 { name: 'Fixed Costs', value: stats.fixed, color: 'bg-amber-500' },
-                { name: 'Variable Overheads', value: stats.variable, color: 'bg-purple-500' },
+                { name: 'Variable Overheads', value: stats.variable, color: 'bg-violet-500' },
               ].map((cat, idx) => {
                 const percent = (cat.value / maxBarVal) * 100;
                 return (
@@ -502,7 +502,7 @@ export default function ExpenseManager({
                             ? 'bg-rose-500/10 border-rose-500/20 text-rose-400'
                             : item.category === 'Fixed Cost'
                               ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
-                              : 'bg-purple-500/10 border-purple-500/20 text-purple-400'
+                              : 'bg-violet-500/10 border-violet-500/20 text-violet-400'
                         }`}
                       >
                         {item.category}
@@ -587,7 +587,7 @@ export default function ExpenseManager({
                       timeIntervals={15}
                       timeCaption="Time"
                       dateFormat="MMMM d, yyyy h:mm aa"
-                      className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
                       wrapperClassName="w-full"
                     />
                   </div>
@@ -597,7 +597,7 @@ export default function ExpenseManager({
                       name="month"
                       value={form.month}
                       onChange={handleChange}
-                      className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
                     >
                       {MONTHS.map(m => (
                         <option key={m} value={m}>
@@ -617,7 +617,7 @@ export default function ExpenseManager({
                       name="merchantName"
                       value={form.merchantName}
                       onChange={handleChange}
-                      className="flex-1 bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                      className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
                     >
                       <option value="">General overhead</option>
                       {merchants.map(m => (
@@ -641,7 +641,7 @@ export default function ExpenseManager({
                         placeholder="New merchant name..."
                         value={newMerchant}
                         onChange={e => setNewMerchant(e.target.value)}
-                        className="flex-1 bg-slate-950 border border-slate-850 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-indigo-500"
+                        className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-indigo-500"
                       />
                       <button
                         type="button"

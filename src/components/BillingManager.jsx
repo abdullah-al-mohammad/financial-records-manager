@@ -475,7 +475,7 @@ export default function BillingManager({
             <select
               value={billReportMerchant}
               onChange={e => setBillReportMerchant(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
             >
               <option value="">Select Merchant</option>
               {merchants.map(m => (
@@ -501,7 +501,7 @@ export default function BillingManager({
               dateFormat="MMMM d, yyyy"
               isClearable
               placeholderText="Select start date"
-              className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
               wrapperClassName="w-full"
             />
           </div>
@@ -521,7 +521,7 @@ export default function BillingManager({
               dateFormat="MMMM d, yyyy"
               isClearable
               placeholderText="Select end date"
-              className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
               wrapperClassName="w-full"
             />
           </div>
@@ -630,7 +630,7 @@ export default function BillingManager({
                   }
                 }}
                 dateFormat="MMMM d, yyyy"
-                className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
                 wrapperClassName="w-full"
               />
             </div>
@@ -641,7 +641,7 @@ export default function BillingManager({
                 required
                 value={selectedMerchant}
                 onChange={e => setSelectedMerchant(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
               >
                 <option value="">Choose Merchant</option>
                 {merchants.map(m => (
@@ -662,7 +662,7 @@ export default function BillingManager({
                 placeholder="e.g. 15000"
                 value={paidAmount}
                 onChange={e => setPaidAmount(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
               />
             </div>
 
@@ -673,7 +673,7 @@ export default function BillingManager({
                 placeholder="e.g. Bank transfer reference"
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3.5 py-2 text-xs text-white outline-none"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white outline-none"
               />
             </div>
 
@@ -912,7 +912,7 @@ export default function BillingManager({
 
                 <button
                   onClick={() => openMerchantStatement(m.name)}
-                  className="px-3 py-1.5 bg-slate-950 border border-slate-850 hover:border-slate-700 text-slate-300 rounded-xl text-[10px] font-bold transition-all cursor-pointer"
+                  className="px-3 py-1.5 bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-300 rounded-xl text-[10px] font-bold transition-all cursor-pointer"
                 >
                   View History
                 </button>
@@ -1110,7 +1110,7 @@ export default function BillingManager({
                     Outstanding
                   </span>
                   <span
-                    className={`text-sm font-extrabold block mt-1 ${merchantBillReportData.totals.ending > 0 ? 'text-rose-450 text-rose-400' : 'text-emerald-400'}`}
+                    className={`text-sm font-extrabold block mt-1 ${merchantBillReportData.totals.ending > 0 ? 'text-rose-400' : 'text-emerald-400'}`}
                   >
                     ৳{merchantBillReportData.totals.ending.toLocaleString()}
                   </span>
@@ -1171,7 +1171,7 @@ export default function BillingManager({
                     <tbody className="divide-y divide-slate-900/60 text-slate-300">
                       {merchantBillReportData?.payments.length === 0 ? (
                         <tr>
-                          <td colSpan="3" className="p-4 text-center text-slate-650 text-slate-500">
+                          <td colSpan="3" className="p-4 text-center text-slate-500">
                             No payments logged.
                           </td>
                         </tr>
@@ -1318,7 +1318,7 @@ export default function BillingManager({
                     <td className="py-2 px-3 font-bold text-emerald-700">
                       ৳{Number(p.paidAmount || 0).toLocaleString()}
                     </td>
-                    <td className="py-2 px-3 text-slate-650 italic">{p.notes || '—'}</td>
+                    <td className="py-2 px-3 text-slate-600 italic">{p.notes || '—'}</td>
                   </tr>
                 ))
               )}

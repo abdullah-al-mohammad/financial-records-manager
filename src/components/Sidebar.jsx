@@ -43,7 +43,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, theme
   return (
     <>
       {/* Mobile Top Bar */}
-      <div className="lg:hidden flex items-center justify-between px-4 py-3 bg-[var(--bg-sidebar-color)] border-b border-slate-905 sticky top-0 z-40">
+      <div className="lg:hidden flex items-center justify-between px-4 py-3 bg-[var(--bg-sidebar-color)] border-b border-slate-800 sticky top-0 z-40">
         <div className="flex items-center gap-2">
           <div 
             className="bg-black p-1.5 rounded-lg shadow-sm border border-slate-800"
@@ -142,7 +142,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, theme
                 </>
               )}
             </div>
-            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-sm shadow-emerald-500/50" />
+            <span className={`w-2 h-2 rounded-full animate-pulse shadow-sm ${user?.isLive ? 'bg-emerald-500 shadow-emerald-500/50' : 'bg-amber-500 shadow-amber-500/50'}`} />
           </div>
 
           {/* Theme Selector Option */}

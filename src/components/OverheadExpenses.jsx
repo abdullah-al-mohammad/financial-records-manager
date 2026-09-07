@@ -8,7 +8,7 @@ const OverheadExpenses = ({ form, handleChange }) => {
           name="paymentSource"
           value={form.paymentSource || 'cash'}
           onChange={handleChange}
-          className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none"
+          className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none"
         >
           <option value="online">Online</option>
           <option value="cash">Cash</option>
@@ -26,7 +26,7 @@ const OverheadExpenses = ({ form, handleChange }) => {
             value={form.riderName}
             onChange={handleChange}
             placeholder="e.g. Fahim"
-            className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none"
+            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none"
           />
         </div>
         <div className="space-y-1">
@@ -37,7 +37,7 @@ const OverheadExpenses = ({ form, handleChange }) => {
             value={form.riderSalary}
             onChange={handleChange}
             placeholder="e.g. 500"
-            className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none"
+            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none"
           />
         </div>
       </div>
@@ -52,7 +52,7 @@ const OverheadExpenses = ({ form, handleChange }) => {
             value={form.otherExpenseName}
             onChange={handleChange}
             placeholder="e.g. Fuel / Icepacks"
-            className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none"
+            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none"
           />
         </div>
         <div className="space-y-1">
@@ -63,7 +63,7 @@ const OverheadExpenses = ({ form, handleChange }) => {
             value={form.otherExpense}
             onChange={handleChange}
             placeholder="e.g. 350"
-            className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none"
+            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none"
           />
         </div>
         <div className="space-y-1">
@@ -74,7 +74,7 @@ const OverheadExpenses = ({ form, handleChange }) => {
             value={form.expenseDescription}
             onChange={handleChange}
             placeholder="e.g. Fuel Cost – 500 BDT (Yasin)"
-            className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none"
+            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none"
           />
         </div>
       </div>
@@ -89,7 +89,7 @@ const OverheadExpenses = ({ form, handleChange }) => {
             value={form.fixedExpenseName}
             onChange={handleChange}
             placeholder="e.g. Internet / Rent"
-            className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none"
+            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none"
           />
         </div>
         <div className="space-y-1">
@@ -100,7 +100,7 @@ const OverheadExpenses = ({ form, handleChange }) => {
             value={form.fixedExpense}
             onChange={handleChange}
             placeholder="e.g. 1200"
-            className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none"
+            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none"
           />
         </div>
       </div>

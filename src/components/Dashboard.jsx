@@ -690,9 +690,9 @@ export default function Dashboard({
             </button>
           </div>
 
-          <div className="glass-panel border border-red-500/15 rounded-2xl p-5 flex items-center justify-between shadow-lg shadow-red-500/5">
+          <div className="glass-panel border border-rose-500/15 rounded-2xl p-5 flex items-center justify-between shadow-lg shadow-rose-500/5">
             <div className="flex items-center gap-4">
-              <div className="p-3.5 rounded-2xl bg-red-500/10 text-red-400">
+              <div className="p-3.5 rounded-2xl bg-rose-500/10 text-rose-400">
                 <Receipt className="w-5 h-5" />
               </div>
               <div>
@@ -706,7 +706,7 @@ export default function Dashboard({
             </div>
             <button
               onClick={() => setActiveTab('receivables')}
-              className="text-[11px] font-bold text-red-400 hover:text-red-300 py-1.5 px-3 rounded-lg bg-red-500/5 hover:bg-red-500/10 transition-all cursor-pointer"
+              className="text-[11px] font-bold text-rose-400 hover:text-rose-300 py-1.5 px-3 rounded-lg bg-rose-500/5 hover:bg-rose-500/10 transition-all cursor-pointer"
             >
               Pay Now
             </button>
@@ -1164,7 +1164,7 @@ export default function Dashboard({
                   type="button"
                   onClick={handleCloseMonth}
                   disabled={closeSubmitting}
-                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white text-sm font-bold shadow-lg shadow-amber-900/30 disabled:opacity-60 disabled:cursor-not-allowed transition-all cursor-pointer active:scale-[0.98]"
+                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white text-sm font-bold shadow-lg shadow-amber-900/30 disabled:opacity-60 disabled:cursor-not-allowed transition-all cursor-pointer active:scale-[0.98]"
                 >
                   {closeSubmitting ? 'Saving…' : `✓ Confirm &amp; Close Month`}
                 </button>

@@ -546,7 +546,7 @@ export default function SalesManager({
                       timeIntervals={15}
                       timeCaption="Time"
                       dateFormat="MMMM d, yyyy h:mm aa"
-                      className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
                       wrapperClassName="w-full"
                     />
                   </div>
@@ -559,7 +559,7 @@ export default function SalesManager({
                       name="month"
                       value={form.month}
                       onChange={handleChange}
-                      className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
                     >
                       {MONTHS.map(m => (
                         <option key={m} value={m}>
@@ -579,7 +579,7 @@ export default function SalesManager({
                       name="merchantName"
                       value={form.merchantName}
                       onChange={handleChange}
-                      className="flex-1 bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                      className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
                     >
                       <option value="">Select a merchant</option>
                       {merchants.map(m => (
@@ -604,7 +604,7 @@ export default function SalesManager({
                         placeholder="Enter merchant title..."
                         value={newMerchant}
                         onChange={e => setNewMerchant(e.target.value)}
-                        className="flex-1 bg-slate-950 border border-slate-850 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-indigo-500"
+                        className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-indigo-500"
                       />
                       <button
                         type="button"
@@ -635,7 +635,7 @@ export default function SalesManager({
                       value={form.salesAmount}
                       onChange={handleChange}
                       placeholder="e.g. 5000"
-                      className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
                     />
                   </div>
 
@@ -645,7 +645,7 @@ export default function SalesManager({
                       name="salesType"
                       value={form.salesType}
                       onChange={handleChange}
-                      className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
                     >
                       {SALES_TYPES.map(t => (
                         <option key={t} value={t}>
@@ -663,7 +663,7 @@ export default function SalesManager({
                       name="commissionPercent"
                       value={form.commissionPercent}
                       onChange={handleChange}
-                      className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none"
                     >
                       <option value="15">15%</option>
                       <option value="10">10%</option>
@@ -703,7 +703,7 @@ export default function SalesManager({
                       value={form.discountPercent}
                       onChange={handleChange}
                       placeholder="e.g. 5"
-                      className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none"
                     />
                   </div>
 
@@ -725,7 +725,7 @@ export default function SalesManager({
                       value={form.deliveryCharge}
                       onChange={handleChange}
                       placeholder="e.g. 150"
-                      className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none"
                     />
                   </div>
                 </div>
@@ -741,7 +741,7 @@ export default function SalesManager({
                       value={form.otherCashSource || ''}
                       onChange={handleChange}
                       placeholder="e.g. Loan / Asset Sales"
-                      className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
                     />
                   </div>
                   <div className="space-y-1">
@@ -754,7 +754,7 @@ export default function SalesManager({
                       value={form.otherCashAmount || ''}
                       onChange={handleChange}
                       placeholder="e.g. 1000"
-                      className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
                     />
                   </div>
                 </div>
@@ -767,7 +767,7 @@ export default function SalesManager({
                     name="digitalPaymentMethod"
                     value={form.digitalPaymentMethod}
                     onChange={handleChange}
-                    className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
                   >
                     <option value="">Cash / Physical Collection</option>
                     <optgroup label="── Online Payment Methods ──">
@@ -806,7 +806,7 @@ export default function SalesManager({
                       name="paymentSource"
                       value={form.paymentSource || 'cash'}
                       onChange={handleChange}
-                      className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
                     >
                       <option value="cash">Hand Cash (order bought using physical cash)</option>
                       <option value="online">
@@ -876,7 +876,7 @@ export default function SalesManager({
                     );
                   })()}
 
-                <div className="p-3 bg-slate-950 border border-slate-850 rounded-xl flex items-center justify-between mt-4">
+                <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between mt-4">
                   <span className="text-xs font-semibold text-slate-400 flex items-center gap-1">
                     Customer Grand Total:
                     <span className="text-[10px] text-slate-600 block">

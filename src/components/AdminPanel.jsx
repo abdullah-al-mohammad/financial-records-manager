@@ -200,7 +200,7 @@ export default function AdminPanel({ currentUser, onShowToast }) {
           className={`pb-3 text-xs font-bold uppercase tracking-wider transition-all border-b-2 cursor-pointer ${
             activeSubTab === 'users'
               ? 'border-indigo-500 text-white'
-              : 'border-transparent text-slate-500 hover:text-slate-350'
+              : 'border-transparent text-slate-500 hover:text-slate-300'
           }`}
         >
           User Accounts ({users.length})
@@ -210,7 +210,7 @@ export default function AdminPanel({ currentUser, onShowToast }) {
           className={`pb-3 text-xs font-bold uppercase tracking-wider transition-all border-b-2 cursor-pointer ${
             activeSubTab === 'logs'
               ? 'border-indigo-500 text-white'
-              : 'border-transparent text-slate-500 hover:text-slate-350'
+              : 'border-transparent text-slate-500 hover:text-slate-300'
           }`}
         >
           Security Audit Logs ({logs.length})
@@ -259,7 +259,7 @@ export default function AdminPanel({ currentUser, onShowToast }) {
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="e.g. jason_smith"
-                    className="w-full bg-slate-950 disabled:bg-slate-900/60 border border-slate-850 disabled:border-slate-800 disabled:text-slate-500 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                    className="w-full bg-slate-950 disabled:bg-slate-900/60 border border-slate-800 disabled:border-slate-800 disabled:text-slate-500 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
                   />
                 </div>
 
@@ -273,7 +273,7 @@ export default function AdminPanel({ currentUser, onShowToast }) {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
                   />
                 </div>
 
@@ -282,7 +282,7 @@ export default function AdminPanel({ currentUser, onShowToast }) {
                   <select
                     value={role}
                     onChange={(e) => setRole(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
                   >
                     <option value="User">Standard User</option>
                     <option value="Admin">Administrator</option>
@@ -295,7 +295,7 @@ export default function AdminPanel({ currentUser, onShowToast }) {
                     value={status}
                     onChange={(e) => setStatus(e.target.value)}
                     disabled={editingUsername?.toLowerCase() === currentUser.username.toLowerCase()}
-                    className="w-full bg-slate-950 disabled:bg-slate-900/60 border border-slate-850 disabled:border-slate-800 disabled:text-slate-500 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                    className="w-full bg-slate-950 disabled:bg-slate-900/60 border border-slate-800 disabled:border-slate-800 disabled:text-slate-500 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
                   >
                     <option value="Active">Active / Access Granted</option>
                     <option value="Suspended">Suspended / Revoke Access</option>
@@ -309,7 +309,7 @@ export default function AdminPanel({ currentUser, onShowToast }) {
                       setShowAddForm(false);
                       setEditingUsername(null);
                     }}
-                    className="px-4 py-2 border border-slate-850 text-slate-400 hover:text-slate-200 rounded-xl text-xs font-semibold cursor-pointer"
+                    className="px-4 py-2 border border-slate-800 text-slate-400 hover:text-slate-200 rounded-xl text-xs font-semibold cursor-pointer"
                   >
                     Cancel
                   </button>
@@ -337,7 +337,7 @@ export default function AdminPanel({ currentUser, onShowToast }) {
                       {isSelf && <span className="text-[9px] font-bold bg-slate-900 border border-slate-800 text-slate-400 px-1.5 py-0.5 rounded-md uppercase tracking-wider">You</span>}
                     </span>
                     <span className={`px-2 py-0.5 rounded-lg text-[9px] font-bold border uppercase tracking-wider ${
-                      u.status === 'Active' ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-400' : 'bg-rose-500/5 border-rose-500/10 text-rose-450'
+                      u.status === 'Active' ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-400' : 'bg-rose-500/5 border-rose-500/10 text-rose-400'
                     }`}>
                       {u.status}
                     </span>
@@ -402,7 +402,7 @@ export default function AdminPanel({ currentUser, onShowToast }) {
                     <th className="p-3.5">Log Details</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-900/40 font-mono text-[11px] text-slate-350">
+                <tbody className="divide-y divide-slate-900/40 font-mono text-[11px] text-slate-400">
                   {paginatedLogs.length === 0 ? (
                     <tr>
                       <td colSpan="4" className="p-8 text-center text-slate-500 font-medium">
@@ -414,7 +414,7 @@ export default function AdminPanel({ currentUser, onShowToast }) {
                       <tr key={log.id} className="hover:bg-slate-900/10 transition-all">
                         <td className="p-3.5 whitespace-nowrap text-slate-500">
                           <span className="flex items-center gap-1.5 font-sans">
-                            <Calendar className="w-3.5 h-3.5 text-slate-650" />
+                            <Calendar className="w-3.5 h-3.5 text-slate-500" />
                             {formatTimestamp(log.timestamp)}
                           </span>
                         </td>

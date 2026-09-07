@@ -641,7 +641,7 @@ export default function ReceivableManager({
           onClick={() => setActiveTab('payable')}
           className={`flex-1 sm:flex-none flex items-center justify-center gap-2.5 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 cursor-pointer ${
             activeTab === 'payable'
-              ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white shadow-md shadow-rose-600/30'
+              ? 'bg-gradient-to-r from-rose-600 to-rose-500 text-white shadow-md shadow-rose-600/30'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
           }`}
         >
@@ -756,7 +756,7 @@ export default function ReceivableManager({
                 value={paySearchQuery}
                 onChange={e => setPaySearchQuery(e.target.value)}
                 placeholder="Search supplier, note, or amount..."
-                className="w-full bg-slate-950 border border-slate-850 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-rose-500 transition-all"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-rose-500 transition-all"
               />
             </div>
             <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
@@ -796,7 +796,7 @@ export default function ReceivableManager({
               <select
                 value={payAccountFilter}
                 onChange={e => setPayAccountFilter(e.target.value)}
-                className="bg-slate-950 border border-slate-850 rounded-xl px-3 py-1.5 text-xs text-slate-300 outline-none focus:border-rose-500"
+                className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-300 outline-none focus:border-rose-500"
               >
                 <option value="all">All Accounts</option>
                 <option value="cash">Hand Cash</option>
@@ -1086,7 +1086,7 @@ export default function ReceivableManager({
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Search person, business, or note..."
-                className="w-full bg-slate-950 border border-slate-850 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-indigo-500 transition-all"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-indigo-500 transition-all"
               />
             </div>
 
@@ -1132,7 +1132,7 @@ export default function ReceivableManager({
               <select
                 value={accountFilter}
                 onChange={e => setAccountFilter(e.target.value)}
-                className="bg-slate-950 border border-slate-850 rounded-xl px-3 py-1.5 text-xs text-slate-300 outline-none focus:border-indigo-500"
+                className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-300 outline-none focus:border-indigo-500"
               >
                 <option value="all">All Accounts</option>
                 <option value="cash">Hand Cash</option>
@@ -1346,7 +1346,7 @@ export default function ReceivableManager({
 
             <form onSubmit={handleConfirmPay} className="p-6 space-y-5">
               {/* Payment Summary: কতটাকা কাকে দেওয়া হবে তা দেখানো */}
-              <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-850 space-y-2">
+              <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-slate-400">To Person / Supplier:</span>
                   <span className="font-bold text-white">{payingRecord.name}</span>
@@ -1359,7 +1359,7 @@ export default function ReceivableManager({
                   </span>
                 </div>
                 {payingRecord.note && (
-                  <div className="pt-2 border-t border-slate-850/60 text-[11px] text-slate-400">
+                  <div className="pt-2 border-t border-slate-800/60 text-[11px] text-slate-400">
                     <span className="text-slate-500">Note: </span>{payingRecord.note}
                   </div>
                 )}
@@ -1388,7 +1388,7 @@ export default function ReceivableManager({
                         className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all cursor-pointer ${
                           isSelected
                             ? 'bg-rose-600/15 border-rose-500 text-white shadow-sm'
-                            : 'bg-slate-900/40 border-slate-850 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                            : 'bg-slate-900/40 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
                         }`}
                       >
                         <div className="flex items-center justify-between w-full">
@@ -1414,7 +1414,7 @@ export default function ReceivableManager({
                   type="date"
                   value={payModal.paidDate}
                   onChange={e => setPayModal(prev => ({ ...prev, paidDate: e.target.value }))}
-                  className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-rose-500"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-rose-500"
                   required
                 />
               </div>
@@ -1429,7 +1429,7 @@ export default function ReceivableManager({
                   value={payModal.payNote}
                   onChange={e => setPayModal(prev => ({ ...prev, payNote: e.target.value }))}
                   placeholder="e.g. Paid via bKash / receipt #123..."
-                  className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-rose-500"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-rose-500"
                 />
               </div>
 
@@ -1457,7 +1457,7 @@ export default function ReceivableManager({
                   type="submit"
                   id="btn-confirm-pay"
                   disabled={isPaySubmitting}
-                  className="px-5 py-2 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-rose-600/20 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50"
+                  className="px-5 py-2 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white rounded-xl text-xs font-semibold shadow-lg shadow-rose-600/20 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50"
                 >
                   {isPaySubmitting ? 'Processing...' : 'Confirm & Deduct Balance'}
                 </button>
@@ -1505,7 +1505,7 @@ export default function ReceivableManager({
                   value={payForm.name}
                   onChange={e => setPayForm(prev => ({ ...prev, name: e.target.value }))}
                   placeholder="e.g. Packaging World Ltd or Hasan Bhai"
-                  className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-rose-500"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-rose-500"
                   required
                 />
               </div>
@@ -1521,7 +1521,7 @@ export default function ReceivableManager({
                   value={payForm.amount}
                   onChange={e => setPayForm(prev => ({ ...prev, amount: e.target.value }))}
                   placeholder="e.g. 5000"
-                  className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-rose-500"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-rose-500"
                   required
                 />
               </div>
@@ -1535,7 +1535,7 @@ export default function ReceivableManager({
                   type="date"
                   value={payForm.date}
                   onChange={e => setPayForm(prev => ({ ...prev, date: e.target.value }))}
-                  className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-rose-500"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-rose-500"
                   required
                 />
               </div>
@@ -1548,7 +1548,7 @@ export default function ReceivableManager({
                   value={payForm.note}
                   onChange={e => setPayForm(prev => ({ ...prev, note: e.target.value }))}
                   placeholder="e.g. Packaging materials, rent due, etc."
-                  className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-rose-500 resize-none"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-rose-500 resize-none"
                 />
               </div>
 
@@ -1558,7 +1558,7 @@ export default function ReceivableManager({
                 <select
                   value={payForm.status}
                   onChange={e => setPayForm(prev => ({ ...prev, status: e.target.value }))}
-                  className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-rose-500"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-rose-500"
                 >
                   <option value="Unpaid">Unpaid (Pending)</option>
                   <option value="Paid">Paid</option>
@@ -1567,12 +1567,12 @@ export default function ReceivableManager({
 
               {/* যদি Paid select করা হয়, account selector দেখাবে */}
               {payForm.status === 'Paid' && (
-                <div className="space-y-1.5 p-3 rounded-xl bg-slate-900/60 border border-slate-850">
+                <div className="space-y-1.5 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
                   <label className="text-[11px] font-medium text-slate-300 block">Deduct From Balance</label>
                   <select
                     value={payForm.paidAccount}
                     onChange={e => setPayForm(prev => ({ ...prev, paidAccount: e.target.value }))}
-                    className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-rose-500"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-rose-500"
                   >
                     <option value="cash">Hand Cash</option>
                     <option value="online">Online Cash</option>
@@ -1630,7 +1630,7 @@ export default function ReceivableManager({
 
             <form onSubmit={handleConfirmReceive} className="p-6 space-y-5">
               {/* Payment Summary Box */}
-              <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-850 space-y-2">
+              <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-slate-400">From Person / Business:</span>
                   <span className="font-bold text-white">{receivingRecord.name}</span>
@@ -1642,7 +1642,7 @@ export default function ReceivableManager({
                   </span>
                 </div>
                 {receivingRecord.note && (
-                  <div className="pt-2 border-t border-slate-850/60 text-[11px] text-slate-400">
+                  <div className="pt-2 border-t border-slate-800/60 text-[11px] text-slate-400">
                     <span className="text-slate-500">Note: </span>
                     {receivingRecord.note}
                   </div>
@@ -1690,7 +1690,7 @@ export default function ReceivableManager({
                         className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all cursor-pointer ${
                           isSelected
                             ? 'bg-indigo-600/15 border-indigo-500 text-white shadow-sm'
-                            : 'bg-slate-900/40 border-slate-850 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                            : 'bg-slate-900/40 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
                         }`}
                       >
                         <div className="flex items-center justify-between w-full">
@@ -1718,7 +1718,7 @@ export default function ReceivableManager({
                   onChange={e =>
                     setReceiveForm(prev => ({ ...prev, receivedDate: e.target.value }))
                   }
-                  className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
                   required
                 />
               </div>
@@ -1733,7 +1733,7 @@ export default function ReceivableManager({
                   value={receiveForm.receiptNote}
                   onChange={e => setReceiveForm(prev => ({ ...prev, receiptNote: e.target.value }))}
                   placeholder="e.g. Paid in full via cash / bKash trx id..."
-                  className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-indigo-500"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-indigo-500"
                 />
               </div>
 
@@ -1762,7 +1762,7 @@ export default function ReceivableManager({
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-emerald-600/20 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50"
+                  className="px-5 py-2 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white rounded-xl text-xs font-semibold shadow-lg shadow-emerald-600/20 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50"
                 >
                   {isSubmitting ? 'Recording...' : 'Confirm & Add to Balance'}
                 </button>
@@ -1810,7 +1810,7 @@ export default function ReceivableManager({
                   value={form.name}
                   onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
                   placeholder="e.g. Rahim Traders or John Doe"
-                  className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-indigo-500"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-indigo-500"
                   required
                 />
               </div>
@@ -1826,7 +1826,7 @@ export default function ReceivableManager({
                   value={form.amount}
                   onChange={e => setForm(prev => ({ ...prev, amount: e.target.value }))}
                   placeholder="e.g. 15000"
-                  className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-indigo-500"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-indigo-500"
                   required
                 />
               </div>
@@ -1840,7 +1840,7 @@ export default function ReceivableManager({
                   type="date"
                   value={form.date}
                   onChange={e => setForm(prev => ({ ...prev, date: e.target.value }))}
-                  className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
                   required
                 />
               </div>
@@ -1855,7 +1855,7 @@ export default function ReceivableManager({
                   value={form.note}
                   onChange={e => setForm(prev => ({ ...prev, note: e.target.value }))}
                   placeholder="e.g. Wholesale goods refund, loan recovery, etc."
-                  className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-indigo-500 resize-none"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-indigo-500 resize-none"
                 />
               </div>
 
@@ -1867,7 +1867,7 @@ export default function ReceivableManager({
                 <select
                   value={form.status}
                   onChange={e => setForm(prev => ({ ...prev, status: e.target.value }))}
-                  className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
                 >
                   <option value="Not Received">Not Received (Pending)</option>
                   <option value="Received">Received</option>
@@ -1876,14 +1876,14 @@ export default function ReceivableManager({
 
               {/* If marked Received upfront, select account */}
               {form.status === 'Received' && (
-                <div className="space-y-1.5 p-3 rounded-xl bg-slate-900/60 border border-slate-850">
+                <div className="space-y-1.5 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
                   <label className="text-[11px] font-medium text-slate-300 block">
                     Deposit Into Balance
                   </label>
                   <select
                     value={form.receivedAccount}
                     onChange={e => setForm(prev => ({ ...prev, receivedAccount: e.target.value }))}
-                    className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
                   >
                     <option value="cash">Hand Cash</option>
                     <option value="online">Online Cash</option>

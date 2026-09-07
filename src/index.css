@@ -73,13 +73,26 @@
   --color-slate-200: #0f172a;
 
   --color-white: #0f172a;
+  --color-indigo-200: #3730a3;
+  --color-indigo-300: #4f46e5;
   --color-indigo-400: #4338ca;
   --color-indigo-500: #4f46e5;
+  --color-violet-300: #6d28d9;
+  --color-violet-400: #7c3aed;
+  --color-violet-500: #7c3aed;
+  --color-cyan-400: #0891b2;
+  --color-cyan-500: #0e7490;
+  --color-emerald-300: #047857;
   --color-emerald-400: #047857;
   --color-emerald-500: #059669;
+  --color-amber-200: #92400e;
+  --color-amber-300: #b45309;
+  --color-amber-400: #d97706;
+  --color-amber-500: #b45309;
+  --color-rose-200: #be123c;
+  --color-rose-300: #e11d48;
   --color-rose-400: #be123c;
   --color-rose-500: #e11d48;
-  --color-violet-500: #7c3aed;
 
   color-scheme: light;
 }
@@ -150,6 +163,27 @@
 
 :root[data-theme='light'] ::-webkit-scrollbar-thumb {
   background: rgba(99, 102, 241, 0.35);
+}
+
+/* The login screen is intentionally always-dark; keep its palette dark in light mode */
+:root[data-theme='light'] .login-screen {
+  --color-white: #ffffff;
+  --color-slate-950: #020617;
+  --color-slate-900: #0f172a;
+  --color-slate-800: #1e293b;
+  --color-slate-700: #334155;
+  --color-slate-600: #475569;
+  --color-slate-500: #64748b;
+  --color-slate-400: #94a3b8;
+  --color-slate-300: #cbd5e1;
+  --color-slate-200: #e2e8f0;
+  --color-indigo-200: #a5b4fc;
+  --color-violet-300: #c4b5fd;
+  --glass-bg: rgba(15, 23, 42, 0.78);
+  --glass-glow-bg: rgba(9, 14, 30, 0.84);
+  --glass-glow-shadow: 0 14px 40px -4px rgba(0, 0, 0, 0.6), 0 0 24px rgba(99, 102, 241, 0.12), inset 0 1px 0 0 rgba(255, 255, 255, 0.14);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --color-border-card: rgba(99, 102, 241, 0.18);
 }
 
 body {
@@ -284,33 +318,33 @@ body {
 }
 
 .badge-emerald {
-  background: rgba(16, 185, 129, 0.12);
-  color: #10b981;
-  border: 1px solid rgba(16, 185, 129, 0.25);
+  background: color-mix(in srgb, var(--color-emerald-500) 12%, transparent);
+  color: var(--color-emerald-500);
+  border: 1px solid color-mix(in srgb, var(--color-emerald-500) 25%, transparent);
 }
 
 .badge-amber {
-  background: rgba(245, 158, 11, 0.12);
-  color: #f59e0b;
-  border: 1px solid rgba(245, 158, 11, 0.25);
+  background: color-mix(in srgb, var(--color-amber-500) 12%, transparent);
+  color: var(--color-amber-500);
+  border: 1px solid color-mix(in srgb, var(--color-amber-500) 25%, transparent);
 }
 
 .badge-rose {
-  background: rgba(244, 63, 94, 0.12);
-  color: #f43f5e;
-  border: 1px solid rgba(244, 63, 94, 0.25);
+  background: color-mix(in srgb, var(--color-rose-500) 12%, transparent);
+  color: var(--color-rose-500);
+  border: 1px solid color-mix(in srgb, var(--color-rose-500) 25%, transparent);
 }
 
 .badge-indigo {
-  background: rgba(99, 102, 241, 0.12);
-  color: #818cf8;
-  border: 1px solid rgba(99, 102, 241, 0.25);
+  background: color-mix(in srgb, var(--color-indigo-400) 12%, transparent);
+  color: var(--color-indigo-400);
+  border: 1px solid color-mix(in srgb, var(--color-indigo-400) 25%, transparent);
 }
 
 .badge-cyan {
-  background: rgba(6, 182, 212, 0.12);
-  color: #06b6d4;
-  border: 1px solid rgba(6, 182, 212, 0.25);
+  background: color-mix(in srgb, var(--color-cyan-500) 12%, transparent);
+  color: var(--color-cyan-500);
+  border: 1px solid color-mix(in srgb, var(--color-cyan-500) 25%, transparent);
 }
 
 /* Modern Data Table */
@@ -328,7 +362,7 @@ body {
   font-size: 0.6875rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #94a3b8;
+  color: var(--color-slate-400);
   border-bottom: 1px solid var(--table-border);
   white-space: nowrap;
 }

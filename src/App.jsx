@@ -22,6 +22,7 @@ export default function App() {
   const [transfers, setTransfers] = useState([]);
   const [receivables, setReceivables] = useState([]);
   const [payables, setPayables] = useState([]);
+  const [monthClosings, setMonthClosings] = useState([]);
 
   // Edit target bridging from Expense to Sales
   const [editTarget, setEditTarget] = useState(null);
@@ -95,6 +96,7 @@ export default function App() {
     setTransfers([]);
     setReceivables([]);
     setPayables([]);
+    setMonthClosings([]);
 
     setActiveTab('dashboard');
   }, []);
@@ -104,13 +106,14 @@ export default function App() {
     if (!currentUser) return;
     setLoading(true);
     try {
-      const [recordsList, paymentsList, merchantsList, transfersList, receivablesList, payablesList] = await Promise.all([
+      const [recordsList, paymentsList, merchantsList, transfersList, receivablesList, payablesList, monthClosingsList] = await Promise.all([
         api.getAllRecords(),
         api.getAllPayments(),
         api.getMerchants(),
         api.getAllTransfers(),
         api.getAllReceivables(),
         api.getAllPayables(),
+        api.getAllMonthClosings(),
       ]);
       setRecords(recordsList);
       setPayments(paymentsList);
@@ -118,6 +121,7 @@ export default function App() {
       setTransfers(transfersList);
       setReceivables(receivablesList);
       setPayables(payablesList);
+      setMonthClosings(monthClosingsList);
     } catch (err) {
       showToast(`Network Sync Error: ${err.message}`, 'error');
     } finally {
@@ -382,6 +386,22 @@ export default function App() {
     }
   };
 
+  // Month Closing Operations
+  const handleAddMonthClosing = async entry => {
+    setLoading(true);
+    try {
+      const resp = await api.createMonthClosing(entry);
+      if (resp.success) {
+        showToast(`${entry.month} ${entry.year} closed successfully! Carry-forward balance saved.`);
+        await fetchData();
+      }
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Bridge navigation from Expense logs to Sales drawer edit (legacy — no longer used)
   const clearEditTarget = () => {
     setEditTarget(null);
@@ -395,7 +415,17 @@ export default function App() {
   // Active View router
   const renderActiveTab = () => {
     switch (activeTab) {
-      case 'dashboard':
+      case 'dashboard': {
+        // Derive opening balance: find the most recent closing for the month BEFORE the current one
+        const now = new Date();
+        const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        // Sort closings by monthKey descending, pick the latest one that is NOT the current month
+        const sortedClosings = [...monthClosings].sort((a, b) => b.monthKey.localeCompare(a.monthKey));
+        const prevClosing = sortedClosings.find(c => c.monthKey < currentMonthKey) || null;
+        const openingBalance = prevClosing
+          ? { handCash: prevClosing.handCash, onlineCash: prevClosing.onlineCash, otherCash: prevClosing.otherCash }
+          : null;
+
         return (
           <Dashboard
             records={records}
@@ -406,8 +436,12 @@ export default function App() {
             setActiveTab={setActiveTab}
             onAddTransfer={handleAddTransfer}
             onDeleteTransfer={handleDeleteTransfer}
+            monthClosings={monthClosings}
+            openingBalance={openingBalance}
+            onAddMonthClosing={handleAddMonthClosing}
           />
         );
+      }
       case 'sales':
         return (
           <SalesManager

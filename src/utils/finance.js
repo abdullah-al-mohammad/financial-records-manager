@@ -33,7 +33,7 @@ export function sumMerchantPayouts(payments) {
   return payments.reduce((sum, p) => sum + (parseFloat(p.paidAmount) || 0), 0);
 }
 
-export function computeNetCashBalance(records, payments, transfers = [], receivables = [], payables = []) {
+export function computeNetCashBalance(records, payments, transfers = [], receivables = [], payables = [], openingBalance = null) {
   let onlineCollected = 0;
   let cashCollected = 0;
   let otherCashCollected = 0;
@@ -165,20 +165,27 @@ export function computeNetCashBalance(records, payments, transfers = [], receiva
     }
   });
 
-  const otherCashBalance = otherCashCollected - otherCashExpenses;
+  // Opening balance from previous month's closing (carry-forward)
+  const openingHand = parseFloat(openingBalance?.handCash) || 0;
+  const openingOnline = parseFloat(openingBalance?.onlineCash) || 0;
+  const openingOther = parseFloat(openingBalance?.otherCash) || 0;
+
+  const otherCashBalance = otherCashCollected - otherCashExpenses + openingOther;
 
   const cashBalance =
     cashCollected -
     cashExpenses -
     merchantPayouts -
     cashToOnline +
-    onlineToCash;
+    onlineToCash +
+    openingHand;
 
   const onlineBalance =
     onlineCollected -
     onlineExpenses +
     cashToOnline -
-    onlineToCash;
+    onlineToCash +
+    openingOnline;
 
   const netRemaining = onlineBalance + cashBalance + otherCashBalance;
 

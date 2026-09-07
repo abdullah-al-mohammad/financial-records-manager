@@ -1,6 +1,12 @@
 import {
   Activity,
   ArrowRightLeft,
+  BookOpen,
+  CalendarCheck,
+  CalendarClock,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Coins,
   CreditCard,
   DollarSign,
@@ -31,6 +37,9 @@ export default function Dashboard({
   setActiveTab,
   onAddTransfer,
   onDeleteTransfer,
+  monthClosings = [],
+  openingBalance = null,
+  onAddMonthClosing,
 }) {
   const MONTHS_ORDER = [
     'January',
@@ -49,8 +58,8 @@ export default function Dashboard({
 
 
   const balanceSummary = useMemo(
-    () => computeNetCashBalance(records, payments || [], transfers || [], receivables || [], payables || []),
-    [records, payments, transfers, receivables, payables]
+    () => computeNetCashBalance(records, payments || [], transfers || [], receivables || [], payables || [], openingBalance),
+    [records, payments, transfers, receivables, payables, openingBalance]
   );
 
   // Transfer modal state
@@ -60,6 +69,42 @@ export default function Dashboard({
   const [transferDate, setTransferDate] = useState(new Date().toISOString().slice(0, 10));
   const [transferNote, setTransferNote] = useState('');
   const [transferSubmitting, setTransferSubmitting] = useState(false);
+
+  // Month Closing modal state
+  const [showCloseModal, setShowCloseModal] = useState(false);
+  const [closeSubmitting, setCloseSubmitting] = useState(false);
+  const [showClosingHistory, setShowClosingHistory] = useState(false);
+
+  // Derive current month key and check if already closed
+  const now = new Date();
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const currentMonthName = now.toLocaleString('default', { month: 'long' });
+  const currentYear = now.getFullYear();
+  const isCurrentMonthClosed = monthClosings.some(c => c.monthKey === currentMonthKey);
+
+  // Sorted closings (newest first) for history panel
+  const sortedClosings = [...monthClosings].sort((a, b) => b.monthKey.localeCompare(a.monthKey));
+
+  const handleCloseMonth = async () => {
+    setCloseSubmitting(true);
+    try {
+      await onAddMonthClosing({
+        month: currentMonthName,
+        year: currentYear,
+        monthKey: currentMonthKey,
+        handCash: paymentTotals.cash,
+        onlineCash: paymentTotals.online,
+        otherCash: paymentTotals.otherCash,
+        totalCash: paymentTotals.totalCash,
+      });
+      setShowCloseModal(false);
+    } finally {
+      setCloseSubmitting(false);
+    }
+  };
+
+  const fmt = n =>
+    Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
 
   const paymentTotals = useMemo(() => {
@@ -651,7 +696,23 @@ export default function Dashboard({
             </div>
 
             {/* Quick Actions */}
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {/* Close Month Button */}
+              {isCurrentMonthClosed ? (
+                <span className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-emerald-600/15 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  {currentMonthName} Closed
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowCloseModal(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/30 text-amber-300 text-xs font-semibold active:scale-[0.98] transition-all cursor-pointer shadow-sm"
+                >
+                  <CalendarCheck className="w-3.5 h-3.5" />
+                  Close Month
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setShowTransferModal(true)}
@@ -747,9 +808,172 @@ export default function Dashboard({
               </div>
             </div>
           </div>
+
+          {/* Opening Balance Banner — shown when a carry-forward balance is active */}
+          {openingBalance && (
+            <div className="mt-5 relative z-10 flex flex-wrap items-center gap-3 px-4 py-3 rounded-2xl bg-indigo-500/8 border border-indigo-500/20">
+              <div className="p-1.5 rounded-lg bg-indigo-500/15 text-indigo-400 shrink-0">
+                <CalendarClock className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-bold text-indigo-300 uppercase tracking-wider">Carry-Forward Opening Balance Active</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Hand ৳{fmt(openingBalance.handCash)} · Online ৳{fmt(openingBalance.onlineCash)} · Other ৳{fmt(openingBalance.otherCash)}
+                  &nbsp;—&nbsp;added to current month totals
+                </p>
+              </div>
+              <span className="badge-pill badge-indigo text-[10px] shrink-0">From Previous Month</span>
+            </div>
+          )}
+
+          {/* Month Closing History — collapsible accordion */}
+          {monthClosings.length > 0 && (
+            <div className="mt-5 relative z-10">
+              <button
+                type="button"
+                onClick={() => setShowClosingHistory(v => !v)}
+                className="w-full flex items-center justify-between px-4 py-3 rounded-2xl bg-slate-800/40 hover:bg-slate-800/60 border border-slate-700/40 transition-all cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-slate-400" />
+                  <span className="text-xs font-semibold text-slate-300">Monthly Closing History</span>
+                  <span className="badge-pill badge-indigo text-[10px]">{monthClosings.length} record{monthClosings.length !== 1 ? 's' : ''}</span>
+                </div>
+                {showClosingHistory
+                  ? <ChevronUp className="w-4 h-4 text-slate-400" />
+                  : <ChevronDown className="w-4 h-4 text-slate-400" />}
+              </button>
+
+              {showClosingHistory && (
+                <div className="mt-2 rounded-2xl overflow-hidden border border-slate-700/40">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-slate-800/60">
+                        <th className="px-4 py-3 text-left font-semibold text-slate-400 uppercase tracking-wider text-[10px]">Month</th>
+                        <th className="px-4 py-3 text-right font-semibold text-amber-400 uppercase tracking-wider text-[10px]">Hand Cash</th>
+                        <th className="px-4 py-3 text-right font-semibold text-violet-400 uppercase tracking-wider text-[10px]">Online Cash</th>
+                        <th className="px-4 py-3 text-right font-semibold text-emerald-400 uppercase tracking-wider text-[10px]">Other Cash</th>
+                        <th className="px-4 py-3 text-right font-semibold text-white uppercase tracking-wider text-[10px]">Total</th>
+                        <th className="px-4 py-3 text-right font-semibold text-slate-400 uppercase tracking-wider text-[10px]">Closed By</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedClosings.map((c, idx) => (
+                        <tr key={c.id} className={idx % 2 === 0 ? 'bg-slate-900/30' : 'bg-slate-800/20'}>
+                          <td className="px-4 py-3 font-semibold text-slate-200">
+                            <div className="flex items-center gap-2">
+                              {c.monthKey === currentMonthKey && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                              )}
+                              {c.month} {c.year}
+                            </div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">
+                              {new Date(c.closedAt).toLocaleDateString()}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono text-amber-300">৳{fmt(c.handCash)}</td>
+                          <td className="px-4 py-3 text-right font-mono text-violet-300">৳{fmt(c.onlineCash)}</td>
+                          <td className="px-4 py-3 text-right font-mono text-emerald-300">৳{fmt(c.otherCash)}</td>
+                          <td className="px-4 py-3 text-right font-mono text-white font-bold">৳{fmt(c.totalCash)}</td>
+                          <td className="px-4 py-3 text-right text-slate-400">{c.closedBy || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* SVG Charts Panel */}
+        {/* ── Month Closing Confirmation Modal ── */}
+        {showCloseModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}
+            onClick={e => { if (e.target === e.currentTarget) setShowCloseModal(false); }}
+          >
+            <div className="glass-panel border border-amber-500/30 rounded-3xl p-6 w-full max-w-md shadow-2xl shadow-amber-950/30 animate-in fade-in zoom-in-95 duration-200">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-amber-500/15 text-amber-400">
+                    <CalendarCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white">Close {currentMonthName} {currentYear}</h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Snapshot &amp; carry forward to next month</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCloseModal(false)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/50 transition-all cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Balance Breakdown */}
+              <div className="space-y-3 mb-5">
+                <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-amber-500/8 border border-amber-500/20">
+                  <div className="flex items-center gap-2 text-sm text-amber-300">
+                    <PiggyBank className="w-4 h-4" />
+                    Hand Cash
+                  </div>
+                  <span className="font-bold font-mono text-white">৳{fmt(paymentTotals.cash)}</span>
+                </div>
+                <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-violet-500/8 border border-violet-500/20">
+                  <div className="flex items-center gap-2 text-sm text-violet-300">
+                    <CreditCard className="w-4 h-4" />
+                    Online Cash
+                  </div>
+                  <span className="font-bold font-mono text-white">৳{fmt(paymentTotals.online)}</span>
+                </div>
+                <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-emerald-500/8 border border-emerald-500/20">
+                  <div className="flex items-center gap-2 text-sm text-emerald-300">
+                    <Coins className="w-4 h-4" />
+                    Other Cash
+                  </div>
+                  <span className="font-bold font-mono text-white">৳{fmt(paymentTotals.otherCash)}</span>
+                </div>
+                {/* Total divider */}
+                <div className="flex items-center justify-between px-4 py-4 rounded-xl bg-gradient-to-r from-indigo-600/20 via-indigo-500/10 to-violet-600/20 border border-indigo-500/30">
+                  <div className="flex items-center gap-2 text-sm font-bold text-indigo-200">
+                    <Wallet className="w-4 h-4" />
+                    Total Closing Cash
+                  </div>
+                  <span className="text-xl font-extrabold font-mono text-white">৳{fmt(paymentTotals.totalCash)}</span>
+                </div>
+              </div>
+
+              {/* Info note */}
+              <p className="text-[11px] text-slate-400 bg-slate-800/40 rounded-xl px-4 py-3 mb-5 leading-relaxed">
+                💡 This closing balance will be saved as <strong className="text-slate-200">the opening cash for next month</strong>.
+                &nbsp;This action cannot be undone and can only be done <strong className="text-slate-200">once per month</strong>.
+              </p>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowCloseModal(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-700 text-slate-300 text-sm font-semibold hover:bg-slate-700/40 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCloseMonth}
+                  disabled={closeSubmitting}
+                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white text-sm font-bold shadow-lg shadow-amber-900/30 disabled:opacity-60 disabled:cursor-not-allowed transition-all cursor-pointer active:scale-[0.98]"
+                >
+                  {closeSubmitting ? 'Saving…' : `✓ Confirm &amp; Close Month`}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Month-over-Month Column Chart */}
           <div className="lg:col-span-2 glass-panel border border-slate-900 rounded-2xl p-5">

@@ -184,6 +184,7 @@ const mockDb = {
       this.set('withdrawals', []);
       this.set('receivables', DEFAULT_RECEIVABLES);
       this.set('payables', DEFAULT_PAYABLES);
+      this.set('monthClosings', []);
 
       const adminHash = await hashPassword('admin123');
       const userHash = await hashPassword('user123');
@@ -823,6 +824,45 @@ export const api = {
         `ID: ${id}, Name: ${target.name}, Amount: ৳${target.amount}`
       );
       return { success: true };
+    }
+  },
+
+  // --- MONTH CLOSINGS ---
+  async getAllMonthClosings() {
+    if (isLiveMode()) {
+      const resp = await makeJsonpRequest('getMonthClosings');
+      return resp.monthClosings || [];
+    } else {
+      await new Promise(r => setTimeout(r, 100));
+      return mockDb.get('monthClosings', []);
+    }
+  },
+
+  async createMonthClosing(entry) {
+    if (isLiveMode()) {
+      return makePostRequest('createMonthClosing', { entry });
+    } else {
+      await new Promise(r => setTimeout(r, 150));
+      const list = mockDb.get('monthClosings', []);
+      // Duplicate guard — one closing per calendar month
+      if (list.some(c => c.monthKey === entry.monthKey)) {
+        throw new Error(`Month "${entry.month} ${entry.year}" is already closed. Only one closing per month is allowed.`);
+      }
+      const newEntry = {
+        ...entry,
+        id: 'mc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+        closedAt: new Date().toISOString(),
+      };
+      const updated = [...list, newEntry];
+      mockDb.set('monthClosings', updated);
+
+      const session = getCurrentSession();
+      mockDb.logAudit(
+        session?.username || 'admin',
+        'Month Closing',
+        `Closed ${entry.month} ${entry.year} — Total: ৳${entry.totalCash} (Hand: ৳${entry.handCash}, Online: ৳${entry.onlineCash}, Other: ৳${entry.otherCash})`
+      );
+      return { success: true, id: newEntry.id };
     }
   },
 

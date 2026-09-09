@@ -768,6 +768,9 @@ export default function Dashboard({
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                   <span>
                     Total Cash = <span className="text-amber-400 font-semibold">Hand Cash</span> + <span className="text-violet-400 font-semibold">Online Cash</span> + <span className="text-emerald-400 font-semibold">Other Cash</span>
+                    {currentOpeningBalance && (
+                      <span className="text-indigo-400"> + <span className="font-semibold">Opening Balance</span> (৳{fmt((parseFloat(currentOpeningBalance.handCash) || 0) + (parseFloat(currentOpeningBalance.onlineCash) || 0) + (parseFloat(currentOpeningBalance.otherCash) || 0))})</span>
+                    )}
                   </span>
                 </p>
               </div>
@@ -835,6 +838,11 @@ export default function Dashboard({
                 <span className="text-2xl font-bold text-white tracking-tight block">
                   ৳{paymentTotals.cash.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                 </span>
+                {currentOpeningBalance && (parseFloat(currentOpeningBalance.handCash) || 0) > 0 && (
+                  <span className="text-[10px] text-indigo-400 font-medium block mt-0.5">
+                    incl. ৳{fmt(parseFloat(currentOpeningBalance.handCash))} opening
+                  </span>
+                )}
                 <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1.5 pt-1.5 border-t border-slate-800/60">
                   <span>Physical in-hand cash</span>
                   <span className="font-bold text-amber-400 font-mono text-[10px]">
@@ -860,6 +868,11 @@ export default function Dashboard({
                 <span className="text-2xl font-bold text-white tracking-tight block">
                   ৳{paymentTotals.online.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                 </span>
+                {currentOpeningBalance && (parseFloat(currentOpeningBalance.onlineCash) || 0) > 0 && (
+                  <span className="text-[10px] text-indigo-400 font-medium block mt-0.5">
+                    incl. ৳{fmt(parseFloat(currentOpeningBalance.onlineCash))} opening
+                  </span>
+                )}
                 <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1.5 pt-1.5 border-t border-slate-800/60">
                   <span>Bank &amp; digital accounts</span>
                   <span className="font-bold text-violet-400 font-mono text-[10px]">
@@ -885,6 +898,11 @@ export default function Dashboard({
                 <span className="text-2xl font-bold text-white tracking-tight block">
                   ৳{paymentTotals.otherCash.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                 </span>
+                {currentOpeningBalance && (parseFloat(currentOpeningBalance.otherCash) || 0) > 0 && (
+                  <span className="text-[10px] text-indigo-400 font-medium block mt-0.5">
+                    incl. ৳{fmt(parseFloat(currentOpeningBalance.otherCash))} opening
+                  </span>
+                )}
                 <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1.5 pt-1.5 border-t border-slate-800/60">
                   <span>Auxiliary / petty reserve</span>
                   <span className="font-bold text-emerald-400 font-mono text-[10px]">

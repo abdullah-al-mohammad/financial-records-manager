@@ -67,8 +67,6 @@ const defaultForm = {
   discountAmount: '0.00',
   deliveryCharge: '',
   paidByCustomer: '0.00',
-  otherCashSource: '',
-  otherCashAmount: '',
   riderName: '',
   riderSalary: '',
   otherExpenseName: '',
@@ -162,7 +160,6 @@ export default function SalesManager({
       commissionPercent: rec.commissionPercent || '15',
       discountPercent: rec.discountPercent || '',
       deliveryCharge: rec.deliveryCharge || '',
-      otherCashAmount: rec.otherCashAmount || '',
       riderSalary: rec.riderSalary || '',
       otherExpense: rec.otherExpense || '',
       fixedExpense: rec.fixedExpense || '',
@@ -198,8 +195,6 @@ export default function SalesManager({
       discountAmount: String(form.discountAmount),
       deliveryCharge: form.deliveryCharge ? String(form.deliveryCharge) : '0',
       paidByCustomer: String(form.paidByCustomer),
-      otherCashSource: form.otherCashSource || '',
-      otherCashAmount: form.otherCashAmount ? String(form.otherCashAmount) : '0',
       riderName: form.riderName || '',
       riderSalary: form.riderSalary ? String(form.riderSalary) : '0',
       otherExpenseName: form.otherExpenseName || '',
@@ -245,8 +240,7 @@ export default function SalesManager({
         records.filter(
           r =>
             (parseFloat(r.salesAmount) || 0) > 0 ||
-            (parseFloat(r.deliveryCharge) || 0) > 0 ||
-            (parseFloat(r.otherCashAmount) || 0) > 0
+            (parseFloat(r.deliveryCharge) || 0) > 0
         )
       ),
     [records]
@@ -370,7 +364,6 @@ export default function SalesManager({
                 <th>Bill Amount</th>
                 <th>Discount</th>
                 <th>Delivery</th>
-                <th>Other Cash</th>
                 <th>Payment Method</th>
                 <th>Paid by Cust</th>
                 <th className="text-center">Actions</th>
@@ -379,7 +372,7 @@ export default function SalesManager({
             <tbody>
               {filteredRecords.length === 0 ? (
                 <tr>
-                  <td colSpan="11" className="p-10 text-center text-slate-500 font-medium">
+                  <td colSpan="10" className="p-10 text-center text-slate-500 font-medium">
                     No transactions found matching the parameters.
                   </td>
                 </tr>
@@ -446,23 +439,6 @@ export default function SalesManager({
                         {isRecTransfer || !r.deliveryCharge
                           ? '—'
                           : `৳${Number(r.deliveryCharge).toLocaleString()}`}
-                      </td>
-                      <td className="text-slate-300">
-                        {isRecTransfer ||
-                        !(r.otherCashAmount && parseFloat(r.otherCashAmount) > 0) ? (
-                          '—'
-                        ) : (
-                          <>
-                            <span className="font-semibold text-emerald-400">
-                              ৳{Number(r.otherCashAmount).toLocaleString()}
-                            </span>
-                            {r.otherCashSource && (
-                              <span className="text-[10px] text-slate-500 block">
-                                ({r.otherCashSource})
-                              </span>
-                            )}
-                          </>
-                        )}
                       </td>
 
                       <td>
@@ -746,35 +722,6 @@ export default function SalesManager({
                       onChange={handleChange}
                       placeholder="e.g. 150"
                       className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-medium text-slate-400">
-                      Other Cash Source Name
-                    </label>
-                    <input
-                      type="text"
-                      name="otherCashSource"
-                      value={form.otherCashSource || ''}
-                      onChange={handleChange}
-                      placeholder="e.g. Loan / Asset Sales"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-medium text-slate-400">
-                      Other Cash Amount (৳)
-                    </label>
-                    <input
-                      type="number"
-                      name="otherCashAmount"
-                      value={form.otherCashAmount || ''}
-                      onChange={handleChange}
-                      placeholder="e.g. 1000"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
                     />
                   </div>
                 </div>

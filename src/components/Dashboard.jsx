@@ -35,6 +35,7 @@ export default function Dashboard({
   transfers = [],
   receivables = [],
   payables = [],
+  otherCashRecords = [],
   setActiveTab,
   onAddTransfer,
   onDeleteTransfer,
@@ -90,8 +91,9 @@ export default function Dashboard({
       receivables || [],
       payables || [],
       openingForThisMonth,
+      otherCashRecords || [],
     );
-  }, [records, payments, transfers, receivables, payables, openingBalances, currentOpeningBalance]);
+  }, [records, payments, transfers, receivables, payables, openingBalances, currentOpeningBalance, otherCashRecords]);
 
   // Resolved opening balance for the current month — same lookup used by balanceSummary,
   // exposed separately so the UI formula display and card sub-labels can reference it.

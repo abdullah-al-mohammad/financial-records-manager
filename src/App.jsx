@@ -8,6 +8,7 @@ import Dashboard from './components/Dashboard';
 import ExpenseManager from './components/ExpenseManager';
 import HistoryManager from './components/HistoryManager';
 import Login from './components/Login';
+import OtherCashManager from './components/OtherCashManager';
 import ReceivableManager from './components/ReceivableManager';
 import SalesManager from './components/SalesManager';
 import Sidebar from './components/Sidebar';
@@ -24,6 +25,7 @@ export default function App() {
   const [payables, setPayables] = useState([]);
   const [monthClosings, setMonthClosings] = useState([]);
   const [openingBalances, setOpeningBalances] = useState([]);
+  const [otherCashRecords, setOtherCashRecords] = useState([]);
 
   // Edit target bridging from Expense to Sales
   const [editTarget, setEditTarget] = useState(null);
@@ -99,6 +101,7 @@ export default function App() {
     setPayables([]);
     setMonthClosings([]);
     setOpeningBalances([]);
+    setOtherCashRecords([]);
 
     setActiveTab('dashboard');
   }, []);
@@ -117,6 +120,7 @@ export default function App() {
         payablesResult,
         monthClosingsResult,
         openingBalancesResult,
+        otherCashRecordsResult,
       ] = await Promise.allSettled([
         api.getAllRecords(),
         api.getAllPayments(),
@@ -126,6 +130,7 @@ export default function App() {
         api.getAllPayables(),
         api.getAllMonthClosings(),
         api.getOpeningBalances(),
+        api.getAllOtherCashRecords(),
       ]);
 
       // Apply each result independently — a failure in one does not wipe the rest
@@ -137,11 +142,13 @@ export default function App() {
       if (payablesResult.status === 'fulfilled') setPayables(payablesResult.value);
       if (monthClosingsResult.status === 'fulfilled') setMonthClosings(monthClosingsResult.value);
       if (openingBalancesResult.status === 'fulfilled') setOpeningBalances(openingBalancesResult.value);
+      if (otherCashRecordsResult.status === 'fulfilled') setOtherCashRecords(otherCashRecordsResult.value);
 
       // Surface any individual failures as warnings (not hard errors)
       const failures = [
         recordsResult, paymentsResult, merchantsResult, transfersResult,
         receivablesResult, payablesResult, monthClosingsResult, openingBalancesResult,
+        otherCashRecordsResult,
       ].filter(r => r.status === 'rejected');
       if (failures.length > 0) {
         const msgs = failures.map(r => r.reason?.message || 'Unknown error').join('; ');
@@ -446,6 +453,52 @@ export default function App() {
     setEditTarget(null);
   };
 
+  // Other Cash Records Operations (CRUD)
+  const handleAddOtherCashRecord = async record => {
+    setLoading(true);
+    try {
+      const resp = await api.createOtherCashRecord(record);
+      if (resp.success) {
+        showToast('Other cash record created successfully!');
+        await fetchData();
+      }
+    } catch (err) {
+      showToast(`Creation Failed: ${err.message}`, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateOtherCashRecord = async record => {
+    setLoading(true);
+    try {
+      const resp = await api.updateOtherCashRecord(record);
+      if (resp.success) {
+        showToast('Other cash record updated!');
+        await fetchData();
+      }
+    } catch (err) {
+      showToast(`Update Failed: ${err.message}`, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteOtherCashRecord = async id => {
+    setLoading(true);
+    try {
+      const resp = await api.deleteOtherCashRecord(id);
+      if (resp.success) {
+        showToast('Other cash record removed.');
+        await fetchData();
+      }
+    } catch (err) {
+      showToast(`Deletion Failed: ${err.message}`, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Authentication gate
   if (!currentUser) {
     return <Login onLoginSuccess={handleLoginSuccess} />;
@@ -466,6 +519,7 @@ export default function App() {
             transfers={transfers}
             receivables={receivables}
             payables={payables}
+            otherCashRecords={otherCashRecords}
             setActiveTab={setActiveTab}
             onAddTransfer={handleAddTransfer}
             onDeleteTransfer={handleDeleteTransfer}
@@ -525,6 +579,15 @@ export default function App() {
             onAddPayable={handleAddPayable}
             onUpdatePayable={handleUpdatePayable}
             onDeletePayable={handleDeletePayable}
+          />
+        );
+      case 'otherCash':
+        return (
+          <OtherCashManager
+            otherCashRecords={otherCashRecords}
+            onAddRecord={handleAddOtherCashRecord}
+            onUpdateRecord={handleUpdateOtherCashRecord}
+            onDeleteRecord={handleDeleteOtherCashRecord}
           />
         );
       case 'history':

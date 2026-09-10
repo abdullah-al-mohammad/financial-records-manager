@@ -1106,4 +1106,82 @@ export const api = {
       return mockDb.get('audit');
     }
   },
+
+  // --- OTHER CASH RECORDS (Separate from Sales Records) ---
+  async getAllOtherCashRecords() {
+    if (isLiveMode()) {
+      const resp = await makeJsonpRequest('getOtherCashRecords');
+      return resp.otherCashRecords || [];
+    } else {
+      await new Promise(r => setTimeout(r, 100));
+      return mockDb.get('otherCashRecords', []);
+    }
+  },
+
+  async createOtherCashRecord(record) {
+    if (isLiveMode()) {
+      return makePostRequest('createOtherCashRecord', { record });
+    } else {
+      await new Promise(r => setTimeout(r, 150));
+      const list = mockDb.get('otherCashRecords', []);
+      const newRecord = {
+        ...record,
+        id: record.id || 'oc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+        createdAt: record.createdAt || new Date().toISOString(),
+      };
+      const updated = [...list, newRecord];
+      mockDb.set('otherCashRecords', updated);
+
+      const session = getCurrentSession();
+      mockDb.logAudit(
+        session?.username || 'admin',
+        'Create Other Cash Record',
+        `ID: ${newRecord.id}, Type: ${newRecord.type}, Source: ${newRecord.source}, Amount: ৳${newRecord.amount}`
+      );
+      return { success: true, id: newRecord.id };
+    }
+  },
+
+  async updateOtherCashRecord(record) {
+    if (isLiveMode()) {
+      return makePostRequest('updateOtherCashRecord', { record });
+    } else {
+      await new Promise(r => setTimeout(r, 150));
+      const list = mockDb.get('otherCashRecords', []);
+      const idx = list.findIndex(r => r.id === record.id);
+      if (idx === -1) throw new Error('Other cash record not found');
+      list[idx] = record;
+      mockDb.set('otherCashRecords', list);
+
+      const session = getCurrentSession();
+      mockDb.logAudit(
+        session?.username || 'admin',
+        'Update Other Cash Record',
+        `ID: ${record.id}, Type: ${record.type}, Source: ${record.source}, Amount: ৳${record.amount}`
+      );
+      return { success: true };
+    }
+  },
+
+  async deleteOtherCashRecord(id) {
+    if (isLiveMode()) {
+      return makePostRequest('deleteOtherCashRecord', { id });
+    } else {
+      await new Promise(r => setTimeout(r, 150));
+      const list = mockDb.get('otherCashRecords', []);
+      const target = list.find(r => r.id === id);
+      if (!target) throw new Error('Other cash record not found');
+
+      const filtered = list.filter(r => r.id !== id);
+      mockDb.set('otherCashRecords', filtered);
+
+      const session = getCurrentSession();
+      mockDb.logAudit(
+        session?.username || 'admin',
+        'Delete Other Cash Record',
+        `ID: ${id}, Type: ${target.type}, Source: ${target.source}, Amount: ৳${target.amount}`
+      );
+      return { success: true };
+    }
+  },
 };

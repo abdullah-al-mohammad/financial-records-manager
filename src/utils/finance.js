@@ -33,7 +33,7 @@ export function sumMerchantPayouts(payments) {
   return payments.reduce((sum, p) => sum + (parseFloat(p.paidAmount) || 0), 0);
 }
 
-export function computeNetCashBalance(records, payments, transfers = [], receivables = [], payables = [], openingBalance = null) {
+export function computeNetCashBalance(records, payments, transfers = [], receivables = [], payables = [], openingBalance = null, otherCashRecords = []) {
   let onlineCollected = 0;
   let cashCollected = 0;
   let otherCashCollected = 0;
@@ -72,8 +72,6 @@ export function computeNetCashBalance(records, payments, transfers = [], receiva
       }
     }
 
-    otherCashCollected += parseFloat(r.otherCashAmount) || 0;
-
     // 3. Operational expenses (rider salary, variable, fixed)
     const expenseAmount =
       (parseFloat(r.riderSalary) || 0) +
@@ -88,6 +86,16 @@ export function computeNetCashBalance(records, payments, transfers = [], receiva
       } else {
         cashExpenses += expenseAmount;
       }
+    }
+  });
+
+  // Process Other Cash Records (separate from sales records)
+  otherCashRecords.forEach(rec => {
+    const amt = parseFloat(rec.amount) || 0;
+    if (rec.type === 'Income') {
+      otherCashCollected += amt;
+    } else if (rec.type === 'Expense') {
+      otherCashExpenses += amt;
     }
   });
 

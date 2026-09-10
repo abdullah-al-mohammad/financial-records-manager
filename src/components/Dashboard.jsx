@@ -67,10 +67,46 @@ export default function Dashboard({
   };
 
 
-  const balanceSummary = useMemo(
-    () => computeNetCashBalance(records, payments || [], transfers || [], receivables || [], payables || [], currentOpeningBalance),
-    [records, payments, transfers, receivables, payables, currentOpeningBalance]
-  );
+  const balanceSummary = useMemo(() => {
+    // Derive the current month's opening balance directly from the openingBalances array.
+    // This is more reliable than the prop passed from App.jsx because it re-evaluates
+    // whenever openingBalances changes, and normalises monthKey formats coming from the
+    // live backend (Google Sheets may return "2026-09-01T00:00:00" instead of "2026-09").
+    const now = new Date();
+    const currentMK = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const openingForThisMonth =
+      (openingBalances || []).find(o => {
+        const mk = String(o.monthKey || '').trim();
+        // Normalise: accept "2026-09", "2026-09-01", "2026-09-01T…" all as a match
+        return mk === currentMK || mk.startsWith(currentMK);
+      }) ||
+      currentOpeningBalance || // fall back to the pre-computed prop
+      null;
+
+    return computeNetCashBalance(
+      records,
+      payments || [],
+      transfers || [],
+      receivables || [],
+      payables || [],
+      openingForThisMonth,
+    );
+  }, [records, payments, transfers, receivables, payables, openingBalances, currentOpeningBalance]);
+
+  // Resolved opening balance for the current month — same lookup used by balanceSummary,
+  // exposed separately so the UI formula display and card sub-labels can reference it.
+  const resolvedOpeningBalance = useMemo(() => {
+    const now = new Date();
+    const currentMK = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    return (
+      (openingBalances || []).find(o => {
+        const mk = String(o.monthKey || '').trim();
+        return mk === currentMK || mk.startsWith(currentMK);
+      }) ||
+      currentOpeningBalance ||
+      null
+    );
+  }, [openingBalances, currentOpeningBalance]);
 
   // Transfer modal state
   const [showTransferModal, setShowTransferModal] = useState(false);
@@ -115,18 +151,18 @@ export default function Dashboard({
   );
 
   // Opening balance source label for the current month
-  const openingSource = currentOpeningBalance
-    ? currentOpeningBalance.source === 'carried_forward'
+  const openingSource = resolvedOpeningBalance
+    ? resolvedOpeningBalance.source === 'carried_forward'
       ? 'carryforward'
       : 'manual'
     : null;
 
   const openOpeningModal = () => {
-    setObSource(currentOpeningBalance?.source || 'manual');
-    setObFromMonthKey(currentOpeningBalance?.fromMonthKey || null);
-    setObHand(currentOpeningBalance?.handCash ?? '');
-    setObOnline(currentOpeningBalance?.onlineCash ?? '');
-    setObOther(currentOpeningBalance?.otherCash ?? '');
+    setObSource(resolvedOpeningBalance?.source || 'manual');
+    setObFromMonthKey(resolvedOpeningBalance?.fromMonthKey || null);
+    setObHand(resolvedOpeningBalance?.handCash ?? '');
+    setObOnline(resolvedOpeningBalance?.onlineCash ?? '');
+    setObOther(resolvedOpeningBalance?.otherCash ?? '');
     setShowOpeningModal(true);
   };
 
@@ -768,8 +804,8 @@ export default function Dashboard({
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                   <span>
                     Total Cash = <span className="text-amber-400 font-semibold">Hand Cash</span> + <span className="text-violet-400 font-semibold">Online Cash</span> + <span className="text-emerald-400 font-semibold">Other Cash</span>
-                    {currentOpeningBalance && (
-                      <span className="text-indigo-400"> + <span className="font-semibold">Opening Balance</span> (৳{fmt((parseFloat(currentOpeningBalance.handCash) || 0) + (parseFloat(currentOpeningBalance.onlineCash) || 0) + (parseFloat(currentOpeningBalance.otherCash) || 0))})</span>
+                    {resolvedOpeningBalance && (
+                      <span className="text-indigo-400"> + <span className="font-semibold">Opening Balance</span> (৳{fmt((Number(resolvedOpeningBalance.handCash) || 0) + (Number(resolvedOpeningBalance.onlineCash) || 0) + (Number(resolvedOpeningBalance.otherCash) || 0))})</span>
                     )}
                   </span>
                 </p>
@@ -785,7 +821,7 @@ export default function Dashboard({
                 className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 text-xs font-semibold active:scale-[0.98] transition-all cursor-pointer shadow-sm"
               >
                 <PencilLine className="w-3.5 h-3.5" />
-                {currentOpeningBalance ? 'Edit Opening Balance' : 'Set Opening Balance'}
+                {resolvedOpeningBalance ? 'Edit Opening Balance' : 'Set Opening Balance'}
               </button>
 
               {/* Close Month Button */}
@@ -838,9 +874,9 @@ export default function Dashboard({
                 <span className="text-2xl font-bold text-white tracking-tight block">
                   ৳{paymentTotals.cash.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                 </span>
-                {currentOpeningBalance && (parseFloat(currentOpeningBalance.handCash) || 0) > 0 && (
+                {resolvedOpeningBalance && (Number(resolvedOpeningBalance.handCash) || 0) > 0 && (
                   <span className="text-[10px] text-indigo-400 font-medium block mt-0.5">
-                    incl. ৳{fmt(parseFloat(currentOpeningBalance.handCash))} opening
+                    incl. ৳{fmt(Number(resolvedOpeningBalance.handCash))} opening
                   </span>
                 )}
                 <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1.5 pt-1.5 border-t border-slate-800/60">
@@ -868,9 +904,9 @@ export default function Dashboard({
                 <span className="text-2xl font-bold text-white tracking-tight block">
                   ৳{paymentTotals.online.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                 </span>
-                {currentOpeningBalance && (parseFloat(currentOpeningBalance.onlineCash) || 0) > 0 && (
+                {resolvedOpeningBalance && (Number(resolvedOpeningBalance.onlineCash) || 0) > 0 && (
                   <span className="text-[10px] text-indigo-400 font-medium block mt-0.5">
-                    incl. ৳{fmt(parseFloat(currentOpeningBalance.onlineCash))} opening
+                    incl. ৳{fmt(Number(resolvedOpeningBalance.onlineCash))} opening
                   </span>
                 )}
                 <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1.5 pt-1.5 border-t border-slate-800/60">
@@ -898,9 +934,9 @@ export default function Dashboard({
                 <span className="text-2xl font-bold text-white tracking-tight block">
                   ৳{paymentTotals.otherCash.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                 </span>
-                {currentOpeningBalance && (parseFloat(currentOpeningBalance.otherCash) || 0) > 0 && (
+                {resolvedOpeningBalance && (Number(resolvedOpeningBalance.otherCash) || 0) > 0 && (
                   <span className="text-[10px] text-indigo-400 font-medium block mt-0.5">
-                    incl. ৳{fmt(parseFloat(currentOpeningBalance.otherCash))} opening
+                    incl. ৳{fmt(Number(resolvedOpeningBalance.otherCash))} opening
                   </span>
                 )}
                 <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1.5 pt-1.5 border-t border-slate-800/60">
@@ -916,7 +952,7 @@ export default function Dashboard({
           </div>
 
           {/* Opening Balance Banner — current month's saved opening record */}
-          {currentOpeningBalance && (
+          {resolvedOpeningBalance && (
             <div className="mt-5 relative z-10 flex flex-wrap items-center gap-3 px-4 py-3 rounded-2xl bg-indigo-500/8 border border-indigo-500/20">
               <div className="p-1.5 rounded-lg bg-indigo-500/15 text-indigo-400 shrink-0">
                 <CalendarClock className="w-4 h-4" />
@@ -927,7 +963,7 @@ export default function Dashboard({
                   <span className="normal-case font-medium text-slate-400"> — {currentMonthName} {currentYear}</span>
                 </p>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  Hand ৳{fmt(currentOpeningBalance.handCash)} · Online ৳{fmt(currentOpeningBalance.onlineCash)} · Other ৳{fmt(currentOpeningBalance.otherCash)}
+                  Hand ৳{fmt(resolvedOpeningBalance.handCash)} · Online ৳{fmt(resolvedOpeningBalance.onlineCash)} · Other ৳{fmt(resolvedOpeningBalance.otherCash)}
                   &nbsp;—&nbsp;added as this month's opening cash
                 </p>
               </div>
@@ -947,7 +983,7 @@ export default function Dashboard({
           )}
 
           {/* Carry-Forward Available Banner — previous month closed, no opening set for current month yet */}
-          {!currentOpeningBalance && previousMonthClosing && (
+          {!resolvedOpeningBalance && previousMonthClosing && (
             <div className="mt-5 relative z-10 flex flex-wrap items-center gap-3 px-4 py-3 rounded-2xl bg-amber-500/8 border border-amber-500/25">
               <div className="p-1.5 rounded-lg bg-amber-500/15 text-amber-400 shrink-0">
                 <CalendarClock className="w-4 h-4" />

@@ -165,10 +165,13 @@ export function computeNetCashBalance(records, payments, transfers = [], receiva
     }
   });
 
-  // Opening balance from previous month's closing (carry-forward)
-  const openingHand = parseFloat(openingBalance?.handCash) || 0;
-  const openingOnline = parseFloat(openingBalance?.onlineCash) || 0;
-  const openingOther = parseFloat(openingBalance?.otherCash) || 0;
+  // Opening balance from previous month's closing (carry-forward).
+  // Use Number() instead of parseFloat() || 0 so that a stored value of 0
+  // is preserved correctly (parseFloat(0) || 0 works, but Number() is clearer).
+  // Also guard against null/undefined with nullish coalescing.
+  const openingHand   = Number(openingBalance?.handCash   ?? 0) || 0;
+  const openingOnline = Number(openingBalance?.onlineCash  ?? 0) || 0;
+  const openingOther  = Number(openingBalance?.otherCash   ?? 0) || 0;
 
   const otherCashBalance = otherCashCollected - otherCashExpenses + openingOther;
 

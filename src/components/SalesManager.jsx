@@ -183,21 +183,38 @@ export default function SalesManager({
       return;
     }
 
+    // Build payload with only user-editable fields
     const payload = {
-      ...form,
       id: editingId || String(Date.now()),
+      date: form.date,
+      month: form.month,
+      merchantName: form.merchantName,
       salesAmount: form.salesAmount ? String(form.salesAmount) : '0',
+      salesType: form.salesType,
+      commissionPercent: form.commissionPercent,
       commissionAmount: String(form.commissionAmount),
       merchantBill: String(form.merchantBill),
+      discountPercent: form.discountPercent,
       discountAmount: String(form.discountAmount),
-      paidByCustomer: String(form.paidByCustomer),
       deliveryCharge: form.deliveryCharge ? String(form.deliveryCharge) : '0',
+      paidByCustomer: String(form.paidByCustomer),
+      otherCashSource: form.otherCashSource || '',
       otherCashAmount: form.otherCashAmount ? String(form.otherCashAmount) : '0',
+      riderName: form.riderName || '',
       riderSalary: form.riderSalary ? String(form.riderSalary) : '0',
+      otherExpenseName: form.otherExpenseName || '',
       otherExpense: form.otherExpense ? String(form.otherExpense) : '0',
+      fixedExpenseName: form.fixedExpenseName || '',
       fixedExpense: form.fixedExpense ? String(form.fixedExpense) : '0',
+      expenseDescription: form.expenseDescription || '',
+      digitalPaymentMethod: form.digitalPaymentMethod || '',
       paymentSource: form.paymentSource !== undefined ? form.paymentSource : 'cash',
     };
+
+    // Preserve createdAt for updates (don't let user change creation timestamp)
+    if (editingId && form.createdAt) {
+      payload.createdAt = form.createdAt;
+    }
 
     try {
       if (editingId) {

@@ -252,12 +252,16 @@ export default function Dashboard({
       sales += parseFloat(r.salesAmount) || 0;
       commission += parseFloat(r.commissionAmount) || 0;
       delivery += parseFloat(r.deliveryCharge) || 0;
-      otherCash += parseFloat(r.otherCashAmount) || 0;
       riderSalaries += parseFloat(r.riderSalary) || 0;
       otherExpenses += parseFloat(r.otherExpense) || 0;
       fixedExpenses += parseFloat(r.fixedExpense) || 0;
       merchantBills += parseFloat(r.merchantBill) || 0;
       customerPaid += parseFloat(r.paidByCustomer) || 0;
+    });
+
+    // Other Cash Collected = sum of all valid Other Cash section entries
+    (otherCashRecords || []).forEach(r => {
+      otherCash += parseFloat(r.amount) || 0;
     });
 
     const income = commission + delivery;
@@ -304,7 +308,7 @@ export default function Dashboard({
       customerPaid,
       merchantTotals,
     };
-  }, [records, payments]);
+  }, [records, payments, otherCashRecords]);
 
   // Outstanding receivables awaiting collection
   const pendingReceivables = useMemo(() => {

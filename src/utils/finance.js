@@ -87,6 +87,12 @@ export function computeNetCashBalance(records, payments, transfers = [], receiva
         cashExpenses += expenseAmount;
       }
     }
+
+    // 4. Other Cash amount carried on the record (standalone other-cash income)
+    const recordOtherCash = parseFloat(r.otherCashAmount) || 0;
+    if (recordOtherCash > 0) {
+      otherCashCollected += recordOtherCash;
+    }
   });
 
   // Process Other Cash Records (separate from sales records)

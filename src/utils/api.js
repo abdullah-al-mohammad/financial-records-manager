@@ -313,7 +313,7 @@ function makeJsonpRequest(action, payload = {}) {
           'Network request timed out. Please check your internet connection or Google Apps Script health.'
         )
       );
-    }, 15000);
+    }, 30000);
 
     function cleanup() {
       window.clearTimeout(timeout);
@@ -385,6 +385,25 @@ async function makePostRequest(action, payload = {}) {
   }
 }
 
+// Retry wrapper: retries the given async fn up to `maxRetries` times
+// with exponential back-off (1s, 2s, 4s …). Returns the first success
+// or rethrows the last error.
+async function fetchWithRetry(fn, maxRetries = 2) {
+  let lastError;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      if (attempt < maxRetries) {
+        const delayMs = Math.pow(2, attempt) * 1000;
+        await new Promise(r => setTimeout(r, delayMs));
+      }
+    }
+  }
+  throw lastError;
+}
+
 
 // Main API Object
 export const api = {
@@ -420,6 +439,69 @@ export const api = {
         username: targetUser.username,
         role: targetUser.role,
         sessionToken: `demo_token_${Date.now()}`,
+      };
+    }
+  },
+
+  // --- CONSOLIDATED DASHBOARD FETCH (single API call, replaces 9 parallel requests) ---
+  async getDashboardData() {
+    if (isLiveMode()) {
+      return fetchWithRetry(() => makeJsonpRequest('getDashboardData'));
+    } else {
+      // Mock mode: return all datasets at once (no artificial delay — instant from localStorage)
+      return {
+        records:          mockDb.get('records'),
+        payments:         mockDb.get('payments'),
+        merchants:        (() => {
+          const records = mockDb.get('records');
+          const payments = mockDb.get('payments');
+          const seeded = mockDb.get('merchants');
+          const set = new Set([...seeded]);
+          records.forEach(r => r.merchantName && set.add(r.merchantName));
+          payments.forEach(p => p.merchantName && set.add(p.merchantName));
+          return Array.from(set).sort();
+        })(),
+        transfers:        mockDb.get('transfers', []),
+        receivables:      mockDb.get('receivables') || DEFAULT_RECEIVABLES,
+        payables:         mockDb.get('payables') || DEFAULT_PAYABLES,
+        openingBalances:  (() => {
+          // Migrate legacy balance (same as getOpeningBalances mock path)
+          try {
+            const raw = localStorage.getItem('fm_opening_balance');
+            if (raw) {
+              const legacy = JSON.parse(raw);
+              localStorage.removeItem('fm_opening_balance');
+              if (legacy) {
+                const list = mockDb.get('openingBalances', []);
+                const monthKey = getCurrentMonthKey();
+                if (!list.some(o => o.monthKey === monthKey)) {
+                  const handCash = parseFloat(legacy.handCash) || 0;
+                  const onlineCash = parseFloat(legacy.onlineCash) || 0;
+                  const otherCash = parseFloat(legacy.otherCash) || 0;
+                  const today = new Date();
+                  list.push({
+                    id: 'ob_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+                    monthKey,
+                    month: today.toLocaleString('default', { month: 'long' }),
+                    year: today.getFullYear(),
+                    handCash, onlineCash, otherCash,
+                    totalCash: handCash + onlineCash + otherCash,
+                    source: 'manual',
+                    fromMonthKey: null,
+                    createdAt: new Date().toISOString(),
+                    createdBy: 'SYSTEM',
+                  });
+                  mockDb.set('openingBalances', list);
+                }
+              }
+            }
+          } catch { localStorage.removeItem('fm_opening_balance'); }
+          return Array.from(
+            new Map((mockDb.get('openingBalances') || []).map(o => [o.monthKey, o])).values()
+          );
+        })(),
+        monthClosings:    mockDb.get('monthClosings', []),
+        otherCashRecords: mockDb.get('otherCashRecords', []),
       };
     }
   },

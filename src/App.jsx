@@ -111,51 +111,67 @@ export default function App() {
     if (!currentUser) return;
     setLoading(true);
     try {
-      const [
-        recordsResult,
-        paymentsResult,
-        merchantsResult,
-        transfersResult,
-        receivablesResult,
-        payablesResult,
-        monthClosingsResult,
-        openingBalancesResult,
-        otherCashRecordsResult,
-      ] = await Promise.allSettled([
-        api.getAllRecords(),
-        api.getAllPayments(),
-        api.getMerchants(),
-        api.getAllTransfers(),
-        api.getAllReceivables(),
-        api.getAllPayables(),
-        api.getAllMonthClosings(),
-        api.getOpeningBalances(),
-        api.getAllOtherCashRecords(),
-      ]);
+      // Primary path: single consolidated API call (live + mock)
+      const result = await api.getDashboardData();
 
-      // Apply each result independently — a failure in one does not wipe the rest
-      if (recordsResult.status === 'fulfilled') setRecords(recordsResult.value);
-      if (paymentsResult.status === 'fulfilled') setPayments(paymentsResult.value);
-      if (merchantsResult.status === 'fulfilled') setMerchants(merchantsResult.value);
-      if (transfersResult.status === 'fulfilled') setTransfers(transfersResult.value);
-      if (receivablesResult.status === 'fulfilled') setReceivables(receivablesResult.value);
-      if (payablesResult.status === 'fulfilled') setPayables(payablesResult.value);
-      if (monthClosingsResult.status === 'fulfilled') setMonthClosings(monthClosingsResult.value);
-      if (openingBalancesResult.status === 'fulfilled') setOpeningBalances(openingBalancesResult.value);
-      if (otherCashRecordsResult.status === 'fulfilled') setOtherCashRecords(otherCashRecordsResult.value);
-
-      // Surface any individual failures as warnings (not hard errors)
-      const failures = [
-        recordsResult, paymentsResult, merchantsResult, transfersResult,
-        receivablesResult, payablesResult, monthClosingsResult, openingBalancesResult,
-        otherCashRecordsResult,
-      ].filter(r => r.status === 'rejected');
-      if (failures.length > 0) {
-        const msgs = failures.map(r => r.reason?.message || 'Unknown error').join('; ');
-        showToast(`Sync warning: ${msgs}`, 'warning');
-      }
+      setRecords(result.records);
+      setPayments(result.payments);
+      setMerchants(result.merchants);
+      setTransfers(result.transfers);
+      setReceivables(result.receivables);
+      setPayables(result.payables);
+      setMonthClosings(result.monthClosings);
+      setOpeningBalances(result.openingBalances);
+      setOtherCashRecords(result.otherCashRecords);
     } catch (err) {
-      showToast(`Network Sync Error: ${err.message}`, 'error');
+      // Fallback: if the consolidated endpoint fails (e.g. old backend
+      // deployment that doesn't have getDashboardData yet), load each
+      // dataset individually so the app still works.
+      try {
+        const [
+          recordsResult,
+          paymentsResult,
+          merchantsResult,
+          transfersResult,
+          receivablesResult,
+          payablesResult,
+          monthClosingsResult,
+          openingBalancesResult,
+          otherCashRecordsResult,
+        ] = await Promise.allSettled([
+          api.getAllRecords(),
+          api.getAllPayments(),
+          api.getMerchants(),
+          api.getAllTransfers(),
+          api.getAllReceivables(),
+          api.getAllPayables(),
+          api.getAllMonthClosings(),
+          api.getOpeningBalances(),
+          api.getAllOtherCashRecords(),
+        ]);
+
+        if (recordsResult.status === 'fulfilled') setRecords(recordsResult.value);
+        if (paymentsResult.status === 'fulfilled') setPayments(paymentsResult.value);
+        if (merchantsResult.status === 'fulfilled') setMerchants(merchantsResult.value);
+        if (transfersResult.status === 'fulfilled') setTransfers(transfersResult.value);
+        if (receivablesResult.status === 'fulfilled') setReceivables(receivablesResult.value);
+        if (payablesResult.status === 'fulfilled') setPayables(payablesResult.value);
+        if (monthClosingsResult.status === 'fulfilled') setMonthClosings(monthClosingsResult.value);
+        if (openingBalancesResult.status === 'fulfilled') setOpeningBalances(openingBalancesResult.value);
+        if (otherCashRecordsResult.status === 'fulfilled') setOtherCashRecords(otherCashRecordsResult.value);
+
+        const failures = [
+          recordsResult, paymentsResult, merchantsResult, transfersResult,
+          receivablesResult, payablesResult, monthClosingsResult, openingBalancesResult,
+          otherCashRecordsResult,
+        ].filter(r => r.status === 'rejected');
+        if (failures.length > 0) {
+          const msgs = failures.map(r => r.reason?.message || 'Unknown error').join('; ');
+          showToast(`Sync warning: ${msgs}`, 'warning');
+        }
+      } catch (fallbackErr) {
+        showToast(`Network Sync Error: ${fallbackErr.message}`, 'error');
+      }
     } finally {
       setLoading(false);
     }

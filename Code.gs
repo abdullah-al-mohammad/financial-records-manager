@@ -126,6 +126,46 @@ function getOtherCashRecordsSheet() {
   return getOrCreateSheet(OTHER_CASH_RECORDS_SHEET, OTHER_CASH_HEADERS);
 }
 
+// Helper: read all rows from a sheet into an array of objects in one call.
+// Avoids the per-action getDataRange().getValues() pattern that causes
+// repeated Google Sheets reads when multiple actions fire in parallel.
+function readAllRows(sheet, headers) {
+  const data = sheet.getDataRange().getValues();
+  return data.length <= 1 ? [] : data.slice(1).map(row => rowToObject(row, headers));
+}
+
+// Single consolidated read for every dataset the Dashboard needs.
+// Fires only ONE getDataRange().getValues() per sheet (9 total, zero duplicates).
+function getDashboardData() {
+  const records          = readAllRows(getSheet(),                 RECORD_HEADERS);
+  const payments         = readAllRows(getPaymentsSheet(),         PAYMENT_HEADERS);
+  const transfers        = readAllRows(getTransfersSheet(),        TRANSFER_HEADERS);
+  const receivables      = readAllRows(getReceivablesSheet(),      RECEIVABLE_HEADERS);
+  const payables         = readAllRows(getPayablesSheet(),         PAYABLE_HEADERS);
+  const openingBalances  = readAllRows(getOpeningBalancesSheet(),  OPENING_BALANCE_HEADERS);
+  const monthClosings    = readAllRows(getMonthClosingsSheet(),    MONTH_CLOSING_HEADERS);
+  const otherCashRecords = readAllRows(getOtherCashRecordsSheet(), OTHER_CASH_HEADERS);
+
+  // Derive merchants from the records + payments data we already read
+  // (replaces the old getMerchants action which read both sheets AGAIN)
+  const merchantSet = new Set();
+  records.forEach(r => { if (r.merchantName) merchantSet.add(String(r.merchantName)); });
+  payments.forEach(p => { if (p.merchantName) merchantSet.add(String(p.merchantName)); });
+  const merchants = Array.from(merchantSet).sort();
+
+  return {
+    records,
+    payments,
+    merchants,
+    transfers,
+    receivables,
+    payables,
+    openingBalances,
+    monthClosings,
+    otherCashRecords,
+  };
+}
+
 // Helper: convert row array to object based on headers
 function formatCellValue(value) {
   if (value instanceof Date) {
@@ -612,6 +652,11 @@ function doGet(e) {
       const otherCashRecords =
         data.length <= 1 ? [] : data.slice(1).map(row => rowToObject(row, OTHER_CASH_HEADERS));
       return jsonResponse({ success: true, otherCashRecords }, callback);
+    }
+
+    // Consolidated dashboard read — one call replaces 9 separate ones
+    if (action === 'getDashboardData') {
+      return jsonResponse({ success: true, ...getDashboardData() }, callback);
     }
 
     if (action === 'getMerchants') {
@@ -1208,6 +1253,11 @@ function doPost(e) {
       const logs =
         data.length <= 1 ? [] : data.slice(1).map(row => rowToObject(row, AUDIT_HEADERS));
       return jsonResponse({ success: true, logs: logs.reverse() });
+    }
+
+    // Consolidated dashboard read — one call replaces 9 separate ones
+    if (action === 'getDashboardData') {
+      return jsonResponse({ success: true, ...getDashboardData() });
     }
 
     return jsonResponse({ success: false, error: 'Unknown action: ' + action });

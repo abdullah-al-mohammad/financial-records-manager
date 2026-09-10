@@ -7,6 +7,7 @@ const RECEIVABLES_SHEET = 'Receivables';
 const PAYABLES_SHEET = 'Payables';
 const OPENING_BALANCES_SHEET = 'OpeningBalances';
 const MONTH_CLOSINGS_SHEET = 'MonthClosings';
+const OTHER_CASH_RECORDS_SHEET = 'OtherCashRecords';
 
 const SECRET_KEY = 'financial-manager-secret-2026';
 const SESSION_LIFETIME_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -45,6 +46,7 @@ const RECEIVABLE_HEADERS = ['id', 'name', 'amount', 'date', 'note', 'status', 'r
 const PAYABLE_HEADERS = ['id', 'name', 'amount', 'date', 'note', 'status', 'paidAccount', 'paidDate'];
 const OPENING_BALANCE_HEADERS = ['id', 'monthKey', 'month', 'year', 'handCash', 'onlineCash', 'otherCash', 'totalCash', 'source', 'fromMonthKey', 'createdAt', 'createdBy'];
 const MONTH_CLOSING_HEADERS = ['id', 'monthKey', 'month', 'year', 'handCash', 'onlineCash', 'otherCash', 'totalCash', 'closedAt', 'createdBy'];
+const OTHER_CASH_HEADERS = ['id', 'date', 'month', 'source', 'amount', 'description', 'type', 'createdAt'];
 
 function getOrCreateSheet(name, headers) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -118,6 +120,10 @@ function getOpeningBalancesSheet() {
 
 function getMonthClosingsSheet() {
   return getOrCreateSheet(MONTH_CLOSINGS_SHEET, MONTH_CLOSING_HEADERS);
+}
+
+function getOtherCashRecordsSheet() {
+  return getOrCreateSheet(OTHER_CASH_RECORDS_SHEET, OTHER_CASH_HEADERS);
 }
 
 // Helper: convert row array to object based on headers
@@ -599,6 +605,15 @@ function doGet(e) {
       return jsonResponse({ success: true, monthClosings: getMonthClosingsList() }, callback);
     }
 
+    // Other Cash Records Actions
+    if (action === 'getOtherCashRecords') {
+      const sheet = getOtherCashRecordsSheet();
+      const data = sheet.getDataRange().getValues();
+      const otherCashRecords =
+        data.length <= 1 ? [] : data.slice(1).map(row => rowToObject(row, OTHER_CASH_HEADERS));
+      return jsonResponse({ success: true, otherCashRecords }, callback);
+    }
+
     if (action === 'getMerchants') {
       const sheet = getSheet();
       const data = sheet.getDataRange().getValues();
@@ -1004,6 +1019,60 @@ function doPost(e) {
 
     if (action === 'createMonthClosing') {
       return jsonResponse(createMonthClosingEntry(entry, user));
+    }
+
+    // Other Cash Records Actions
+    if (action === 'getOtherCashRecords') {
+      const sheet = getOtherCashRecordsSheet();
+      const data = sheet.getDataRange().getValues();
+      const otherCashRecords =
+        data.length <= 1 ? [] : data.slice(1).map(row => rowToObject(row, OTHER_CASH_HEADERS));
+      return jsonResponse({ success: true, otherCashRecords });
+    }
+
+    if (action === 'createOtherCashRecord') {
+      const sheet = getOtherCashRecordsSheet();
+      const record = body.record;
+      if (!record.id) record.id = 'oc_' + new Date().getTime().toString();
+      if (!record.createdAt) record.createdAt = new Date().toISOString();
+      sheet.appendRow(objectToRow(record, OTHER_CASH_HEADERS));
+      logAudit(
+        user,
+        'Create Other Cash Record',
+        `ID: ${record.id}, Type: ${record.type}, Source: ${record.source}, Amount: ৳${record.amount}`
+      );
+      return jsonResponse({ success: true, id: record.id });
+    }
+
+    if (action === 'updateOtherCashRecord') {
+      const sheet = getOtherCashRecordsSheet();
+      const record = body.record;
+      const row = findRowById(sheet, record.id, OTHER_CASH_HEADERS);
+      if (row === -1) return jsonResponse({ success: false, error: 'Other cash record not found' });
+      sheet
+        .getRange(row, 1, 1, OTHER_CASH_HEADERS.length)
+        .setValues([objectToRow(record, OTHER_CASH_HEADERS)]);
+      logAudit(
+        user,
+        'Update Other Cash Record',
+        `ID: ${record.id}, Type: ${record.type}, Source: ${record.source}, Amount: ৳${record.amount}`
+      );
+      return jsonResponse({ success: true });
+    }
+
+    if (action === 'deleteOtherCashRecord') {
+      const sheet = getOtherCashRecordsSheet();
+      const row = findRowById(sheet, id, OTHER_CASH_HEADERS);
+      if (row === -1) return jsonResponse({ success: false, error: 'Other cash record not found' });
+      const detailsRow = sheet.getRange(row, 1, 1, OTHER_CASH_HEADERS.length).getValues()[0];
+      const detailsObj = rowToObject(detailsRow, OTHER_CASH_HEADERS);
+      sheet.deleteRow(row);
+      logAudit(
+        user,
+        'Delete Other Cash Record',
+        `ID: ${id}, Type: ${detailsObj.type}, Source: ${detailsObj.source}, Amount: ৳${detailsObj.amount}`
+      );
+      return jsonResponse({ success: true });
     }
 
     if (action === 'createPayable') {

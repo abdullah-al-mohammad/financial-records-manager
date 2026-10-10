@@ -243,6 +243,24 @@ export function getScriptUrl() {
   return localStorage.getItem(SCRIPT_URL_KEY) || import.meta.env.VITE_APPS_SCRIPT_URL || '';
 }
 
+// Helper to delete all mock data and caches
+export function deleteAllData() {
+  // Remove all mock DB entries
+  Object.keys(localStorage).forEach(key => {
+    if (key.startsWith('fm_mock_')) {
+      localStorage.removeItem(key);
+    }
+  });
+  // Clear initialization flags
+  localStorage.removeItem('fm_mock_initialized');
+  localStorage.removeItem('fm_mock_receivables_initialized');
+  localStorage.removeItem('fm_mock_payables_initialized');
+  // Clear session storage
+  clearSession();
+  // Clear in-memory API cache
+  clearApiCache();
+}
+
 export function setScriptUrl(url) {
   localStorage.setItem(SCRIPT_URL_KEY, url.trim());
 }
@@ -278,6 +296,7 @@ export function saveSession(userObj, rememberMe = true) {
 export function clearSession() {
   localStorage.removeItem(SESSION_KEY);
   sessionStorage.removeItem(SESSION_KEY);
+  clearApiCache();
 }
 
 // JSONP request helper (avoids CORS)
@@ -405,10 +424,112 @@ async function fetchWithRetry(fn, maxRetries = 2) {
 }
 
 
+// --- IN-MEMORY CACHE & REQUEST DEDUPLICATION ---
+const dataCache = new Map();
+const inFlightRequests = new Map();
+const inFlightMutations = new Map();
+const DEFAULT_CACHE_TTL = 30000; // 30 seconds fresh window
+
+// Collision-proof unique ID generator for records across all managers
+export function generateUniqueId(prefix = 'id') {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return `${prefix}_${crypto.randomUUID()}`;
+  }
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 10)}_${Math.random().toString(36).substring(2, 7)}`;
+}
+
+// Ensures every item in a list has a valid, distinct permanent ID and removes duplicate entries with identical IDs
+export function ensureUniqueListIds(list, prefix = 'id') {
+  if (!Array.isArray(list)) return { items: [], wasUpdated: false };
+  const seenIds = new Set();
+  let wasUpdated = false;
+  const items = [];
+  for (const item of list) {
+    if (!item || typeof item !== 'object') continue;
+    let id = item.id !== undefined && item.id !== null ? String(item.id).trim() : '';
+    if (!id) {
+      id = generateUniqueId(prefix);
+      wasUpdated = true;
+      seenIds.add(id);
+      items.push({ ...item, id });
+    } else if (seenIds.has(id)) {
+      // Duplicate record with identical ID: discard duplicate copy
+      wasUpdated = true;
+    } else {
+      seenIds.add(id);
+      items.push({ ...item, id });
+    }
+  }
+  return { items, wasUpdated };
+}
+
+// Mutation deduplication wrapper: prevents identical concurrent in-flight mutations
+export async function deduplicateMutation(key, mutationFn) {
+  if (inFlightMutations.has(key)) {
+    return inFlightMutations.get(key);
+  }
+  const promise = (async () => {
+    try {
+      return await mutationFn();
+    } finally {
+      inFlightMutations.delete(key);
+    }
+  })();
+  inFlightMutations.set(key, promise);
+  return promise;
+}
+
+export function invalidateApiCache(pattern) {
+  if (!pattern) {
+    dataCache.clear();
+    return;
+  }
+  for (const key of dataCache.keys()) {
+    if (key.includes(pattern)) {
+      dataCache.delete(key);
+    }
+  }
+}
+
+export function clearApiCache() {
+  dataCache.clear();
+  inFlightRequests.clear();
+  inFlightMutations.clear();
+}
+
+async function fetchWithCache(cacheKey, fetcher, ttl = DEFAULT_CACHE_TTL, forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && dataCache.has(cacheKey)) {
+    const cached = dataCache.get(cacheKey);
+    if (now - cached.timestamp < ttl) {
+      return cached.data;
+    }
+  }
+
+  // Deduplicate concurrent in-flight requests for the same key
+  if (inFlightRequests.has(cacheKey)) {
+    return inFlightRequests.get(cacheKey);
+  }
+
+  const promise = (async () => {
+    try {
+      const data = await fetcher();
+      dataCache.set(cacheKey, { data, timestamp: Date.now() });
+      return data;
+    } finally {
+      inFlightRequests.delete(cacheKey);
+    }
+  })();
+
+  inFlightRequests.set(cacheKey, promise);
+  return promise;
+}
+
 // Main API Object
 export const api = {
   // --- AUTHENTICATION ---
   async login(username, password) {
+    clearApiCache();
     const live = isLiveMode();
     if (live) {
       return makeJsonpRequest('login', { username, password });
@@ -442,475 +563,689 @@ export const api = {
       };
     }
   },
-
   // --- CONSOLIDATED DASHBOARD FETCH (single API call, replaces 9 parallel requests) ---
-  async getDashboardData() {
-    if (isLiveMode()) {
-      return fetchWithRetry(() => makeJsonpRequest('getDashboardData'));
-    } else {
-      // Mock mode: return all datasets at once (no artificial delay — instant from localStorage)
-      return {
-        records:          mockDb.get('records'),
-        payments:         mockDb.get('payments'),
-        merchants:        (() => {
-          const records = mockDb.get('records');
-          const payments = mockDb.get('payments');
-          const seeded = mockDb.get('merchants');
-          const set = new Set([...seeded]);
-          records.forEach(r => r.merchantName && set.add(r.merchantName));
-          payments.forEach(p => p.merchantName && set.add(p.merchantName));
-          return Array.from(set).sort();
-        })(),
-        transfers:        mockDb.get('transfers', []),
-        receivables:      mockDb.get('receivables') || DEFAULT_RECEIVABLES,
-        payables:         mockDb.get('payables') || DEFAULT_PAYABLES,
-        openingBalances:  (() => {
-          // Migrate legacy balance (same as getOpeningBalances mock path)
-          try {
-            const raw = localStorage.getItem('fm_opening_balance');
-            if (raw) {
-              const legacy = JSON.parse(raw);
-              localStorage.removeItem('fm_opening_balance');
-              if (legacy) {
-                const list = mockDb.get('openingBalances', []);
-                const monthKey = getCurrentMonthKey();
-                if (!list.some(o => o.monthKey === monthKey)) {
-                  const handCash = parseFloat(legacy.handCash) || 0;
-                  const onlineCash = parseFloat(legacy.onlineCash) || 0;
-                  const otherCash = parseFloat(legacy.otherCash) || 0;
-                  const today = new Date();
-                  list.push({
-                    id: 'ob_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
-                    monthKey,
-                    month: today.toLocaleString('default', { month: 'long' }),
-                    year: today.getFullYear(),
-                    handCash, onlineCash, otherCash,
-                    totalCash: handCash + onlineCash + otherCash,
-                    source: 'manual',
-                    fromMonthKey: null,
-                    createdAt: new Date().toISOString(),
-                    createdBy: 'SYSTEM',
-                  });
-                  mockDb.set('openingBalances', list);
+  async getDashboardData({ forceRefresh = false } = {}) {
+    return fetchWithCache(
+      'dashboardData',
+      async () => {
+        if (isLiveMode()) {
+          const resp = await fetchWithRetry(() => makeJsonpRequest('getDashboardData'));
+          return {
+            records:          ensureUniqueListIds(resp.records || [], 'rec').items,
+            payments:         ensureUniqueListIds(resp.payments || [], 'pay').items,
+            merchants:        resp.merchants || [],
+            transfers:        ensureUniqueListIds(resp.transfers || [], 'tr').items,
+            receivables:      ensureUniqueListIds(resp.receivables || [], 'recv').items,
+            payables:         ensureUniqueListIds(resp.payables || [], 'payab').items,
+            openingBalances:  resp.openingBalances || [],
+            monthClosings:    resp.monthClosings || [],
+            otherCashRecords: ensureUniqueListIds(resp.otherCashRecords || [], 'oc').items,
+          };
+        } else {
+          // Mock mode: return all datasets at once with guaranteed unique IDs
+          const { items: records, wasUpdated: recUpdated } = ensureUniqueListIds(mockDb.get('records', []), 'rec');
+          if (recUpdated) mockDb.set('records', records);
+
+          const { items: payments, wasUpdated: payUpdated } = ensureUniqueListIds(mockDb.get('payments', []), 'pay');
+          if (payUpdated) mockDb.set('payments', payments);
+
+          const { items: transfers, wasUpdated: trUpdated } = ensureUniqueListIds(mockDb.get('transfers', []), 'tr');
+          if (trUpdated) mockDb.set('transfers', transfers);
+
+          const { items: receivables, wasUpdated: recvUpdated } = ensureUniqueListIds(mockDb.get('receivables', DEFAULT_RECEIVABLES), 'recv');
+          if (recvUpdated) mockDb.set('receivables', receivables);
+
+          const { items: payables, wasUpdated: payabUpdated } = ensureUniqueListIds(mockDb.get('payables', DEFAULT_PAYABLES), 'payab');
+          if (payabUpdated) mockDb.set('payables', payables);
+
+          const { items: otherCashRecords, wasUpdated: ocUpdated } = ensureUniqueListIds(mockDb.get('otherCashRecords', []), 'oc');
+          if (ocUpdated) mockDb.set('otherCashRecords', otherCashRecords);
+
+          return {
+            records,
+            payments,
+            merchants: (() => {
+              const seeded = mockDb.get('merchants');
+              const set = new Set([...seeded]);
+              records.forEach(r => r.merchantName && set.add(r.merchantName));
+              payments.forEach(p => p.merchantName && set.add(p.merchantName));
+              return Array.from(set).sort();
+            })(),
+            transfers,
+            receivables,
+            payables,
+            openingBalances: (() => {
+              try {
+                const raw = localStorage.getItem('fm_opening_balance');
+                if (raw) {
+                  const legacy = JSON.parse(raw);
+                  localStorage.removeItem('fm_opening_balance');
+                  if (legacy) {
+                    const list = mockDb.get('openingBalances', []);
+                    const monthKey = getCurrentMonthKey();
+                    if (!list.some(o => o.monthKey === monthKey)) {
+                      const handCash = parseFloat(legacy.handCash) || 0;
+                      const onlineCash = parseFloat(legacy.onlineCash) || 0;
+                      const otherCash = parseFloat(legacy.otherCash) || 0;
+                      const today = new Date();
+                      list.push({
+                        id: generateUniqueId('ob'),
+                        monthKey,
+                        month: today.toLocaleString('default', { month: 'long' }),
+                        year: today.getFullYear(),
+                        handCash, onlineCash, otherCash,
+                        totalCash: handCash + onlineCash + otherCash,
+                        source: 'manual',
+                        fromMonthKey: null,
+                        createdAt: new Date().toISOString(),
+                        createdBy: 'SYSTEM',
+                      });
+                      mockDb.set('openingBalances', list);
+                    }
+                  }
                 }
-              }
-            }
-          } catch { localStorage.removeItem('fm_opening_balance'); }
-          return Array.from(
-            new Map((mockDb.get('openingBalances') || []).map(o => [o.monthKey, o])).values()
-          );
-        })(),
-        monthClosings:    mockDb.get('monthClosings', []),
-        otherCashRecords: mockDb.get('otherCashRecords', []),
-      };
-    }
+              } catch { localStorage.removeItem('fm_opening_balance'); }
+              return Array.from(
+                new Map((mockDb.get('openingBalances') || []).map(o => [o.monthKey, o])).values()
+              );
+            })(),
+            monthClosings: mockDb.get('monthClosings', []),
+            otherCashRecords,
+          };
+        }
+      },
+      DEFAULT_CACHE_TTL,
+      forceRefresh
+    );
   },
 
   // --- SALES RECORDS ---
-  async getAllRecords() {
-    if (isLiveMode()) {
-      const resp = await makeJsonpRequest('getAll');
-      const raw = resp.records || [];
-      // Ensure uniqueness even if backend returns duplicate IDs
-      return Array.from(new Map(raw.map(r => [r.id, r])).values());
-    } else {
-      await new Promise(r => setTimeout(r, 200));
-      const raw = mockDb.get('records');
-      // Remove any duplicate IDs (keep the latest entry)
-      const deduped = Array.from(new Map(raw.map(r => [r.id, r])).values());
-      // Persist cleaned data back to localStorage if duplicates were removed
-      if (deduped.length !== raw.length) mockDb.set('records', deduped);
-      return deduped;
-    }
+  async getAllRecords({ forceRefresh = false } = {}) {
+    return fetchWithCache(
+      'records',
+      async () => {
+        if (isLiveMode()) {
+          const resp = await makeJsonpRequest('getAll');
+          const raw = resp.records || [];
+          return ensureUniqueListIds(raw, 'rec').items;
+        } else {
+          await new Promise(r => setTimeout(r, 100));
+          const raw = mockDb.get('records', []);
+          const { items, wasUpdated } = ensureUniqueListIds(raw, 'rec');
+          if (wasUpdated) mockDb.set('records', items);
+          return items;
+        }
+      },
+      DEFAULT_CACHE_TTL,
+      forceRefresh
+    );
   },
 
   async createRecord(record) {
-    if (isLiveMode()) {
-      // Generate a UUID (fallback) to guarantee uniqueness
-      const generateId = () =>
-        typeof crypto !== 'undefined' && crypto.randomUUID
-          ? crypto.randomUUID()
-          : `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      let id = generateId();
-      // Guard against rare collisions by checking existing IDs
-      for (let attempts = 0; attempts < 5; attempts++) {
-        const existing = await this.getAllRecords();
-        if (!existing.some(r => r.id === id)) break;
-        id = generateId();
-      }
-      const newRecord = { ...record, id, createdAt: new Date().toISOString() };
-      return await makeJsonpRequest('create', { record: newRecord });
-    } else {
-      await new Promise(r => setTimeout(r, 200));
-      const records = mockDb.get('records');
-      const newRecord = {
-        ...record,
-        id:
-          typeof crypto !== 'undefined' && crypto.randomUUID
-            ? crypto.randomUUID()
-            : `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        createdAt: new Date().toISOString(),
-      };
-      const updated = [...records, newRecord];
-      // Remove any duplicate IDs (keep the latest entry)
-      const deduped = Array.from(new Map(updated.map(r => [r.id, r])).values());
-      mockDb.set('records', deduped);
+    const id = record.id && String(record.id).trim() !== ''
+      ? String(record.id).trim()
+      : generateUniqueId('rec');
+    const newRecord = {
+      ...record,
+      id,
+      createdAt: record.createdAt || new Date().toISOString(),
+    };
 
-      const session = getCurrentSession();
-      mockDb.logAudit(
-        session?.username || 'admin',
-        'Create Sales Record',
-        `ID: ${newRecord.id}, Merchant: ${newRecord.merchantName}, Amount: ৳${newRecord.salesAmount}`
-      );
-      return { success: true, id: newRecord.id };
-    }
+    return deduplicateMutation(`create_record_${id}`, async () => {
+      invalidateApiCache('dashboardData');
+      invalidateApiCache('records');
+      if (isLiveMode()) {
+        return await makeJsonpRequest('create', { record: newRecord });
+      } else {
+        await new Promise(r => setTimeout(r, 100));
+        const records = mockDb.get('records', []);
+        // Idempotency: if record with this ID already exists, do not duplicate
+        const existing = records.find(r => String(r.id) === String(id));
+        if (existing) {
+          return { success: true, id, duplicatePrevented: true };
+        }
+        const updated = [...records, newRecord];
+        mockDb.set('records', updated);
+
+        const session = getCurrentSession();
+        mockDb.logAudit(
+          session?.username || 'admin',
+          'Create Sales Record',
+          `ID: ${newRecord.id}, Merchant: ${newRecord.merchantName}, Amount: ৳${newRecord.salesAmount}`
+        );
+        return { success: true, id: newRecord.id };
+      }
+    });
   },
 
   async updateRecord(record) {
-    if (isLiveMode()) {
-      return makeJsonpRequest('update', { record });
-    } else {
-      await new Promise(r => setTimeout(r, 200));
-      const records = mockDb.get('records');
-      if (!records.some(r => r.id === record.id)) throw new Error('Record not found');
-      const updated = records.map(r => (r.id === record.id ? record : r));
-      mockDb.set('records', updated);
+    if (!record || !record.id) throw new Error('Record ID is required for update');
+    const targetId = String(record.id).trim();
 
-      const session = getCurrentSession();
-      mockDb.logAudit(
-        session?.username || 'admin',
-        'Update Sales Record',
-        `ID: ${record.id}, Merchant: ${record.merchantName}, Amount: ৳${record.salesAmount}`
-      );
-      return { success: true };
-    }
+    return deduplicateMutation(`update_record_${targetId}`, async () => {
+      invalidateApiCache('dashboardData');
+      invalidateApiCache('records');
+      if (isLiveMode()) {
+        return makeJsonpRequest('update', { record: { ...record, id: targetId } });
+      } else {
+        await new Promise(r => setTimeout(r, 100));
+        const records = mockDb.get('records', []);
+        const idx = records.findIndex(r => String(r.id) === targetId);
+        if (idx === -1) throw new Error('Record not found');
+        records[idx] = { ...record, id: targetId };
+        mockDb.set('records', records);
+
+        const session = getCurrentSession();
+        mockDb.logAudit(
+          session?.username || 'admin',
+          'Update Sales Record',
+          `ID: ${targetId}, Merchant: ${record.merchantName}, Amount: ৳${record.salesAmount}`
+        );
+        return { success: true };
+      }
+    });
   },
 
   async deleteRecord(id) {
-    if (isLiveMode()) {
-      return makeJsonpRequest('delete', { id });
-    } else {
-      await new Promise(r => setTimeout(r, 200));
-      const records = mockDb.get('records');
-      const target = records.find(r => r.id === id);
-      if (!target) throw new Error('Record not found');
+    if (!id || !String(id).trim()) {
+      throw new Error('Valid record ID is required for deletion');
+    }
+    const targetId = String(id).trim();
 
-      const filtered = records.filter(r => r.id !== id);
-      mockDb.set('records', filtered);
+    return deduplicateMutation(`delete_record_${targetId}`, async () => {
+      invalidateApiCache('dashboardData');
+      invalidateApiCache('records');
+      if (isLiveMode()) {
+        return makeJsonpRequest('delete', { id: targetId });
+      } else {
+        await new Promise(r => setTimeout(r, 100));
+        const records = mockDb.get('records', []);
+        const targetIndex = records.findIndex(r => String(r.id) === targetId);
+        if (targetIndex === -1) throw new Error('Record not found');
 
+        const target = records[targetIndex];
+        // Delete ONLY the exact record at targetIndex
+        records.splice(targetIndex, 1);
+        mockDb.set('records', records);
+
+        const session = getCurrentSession();
+        mockDb.logAudit(
+          session?.username || 'admin',
+          'Delete Sales Record',
+          `ID: ${targetId}, Merchant: ${target.merchantName}, Amount: ৳${target.salesAmount}`
+        );
+        return { success: true };
+      }
+    });
+  },
+
+  // Delete all sales records
+  async deleteAllRecords() {
+    return deduplicateMutation('delete_all_records', async () => {
+      invalidateApiCache('dashboardData');
+      invalidateApiCache('records');
+      if (isLiveMode()) {
+        return makeJsonpRequest('deleteAllRecords');
+      }
+      mockDb.set('records', []);
       const session = getCurrentSession();
       mockDb.logAudit(
         session?.username || 'admin',
-        'Delete Sales Record',
-        `ID: ${id}, Merchant: ${target.merchantName}, Amount: ৳${target.salesAmount}`
+        'Delete All Records',
+        'All sales records have been cleared from mock database'
       );
       return { success: true };
-    }
+    });
   },
 
   // --- BILL PAYMENTS ---
-  async getAllPayments() {
-    if (isLiveMode()) {
-      const resp = await makeJsonpRequest('getPayments');
-      return resp.payments || [];
-    } else {
-      await new Promise(r => setTimeout(r, 200));
-      return mockDb.get('payments');
-    }
+  async getAllPayments({ forceRefresh = false } = {}) {
+    return fetchWithCache(
+      'payments',
+      async () => {
+        if (isLiveMode()) {
+          const resp = await makeJsonpRequest('getPayments');
+          const raw = resp.payments || [];
+          return ensureUniqueListIds(raw, 'pay').items;
+        } else {
+          await new Promise(r => setTimeout(r, 100));
+          const raw = mockDb.get('payments', []);
+          const { items, wasUpdated } = ensureUniqueListIds(raw, 'pay');
+          if (wasUpdated) mockDb.set('payments', items);
+          return items;
+        }
+      },
+      DEFAULT_CACHE_TTL,
+      forceRefresh
+    );
   },
 
   async createPayment(payment) {
-    if (isLiveMode()) {
-      return makeJsonpRequest('createPayment', { payment });
-    } else {
-      await new Promise(r => setTimeout(r, 200));
-      const payments = mockDb.get('payments');
-      const newPayment = { ...payment, id: 'p' + Date.now() };
-      payments.push(newPayment);
-      mockDb.set('payments', payments);
+    const id = payment.id && String(payment.id).trim() !== ''
+      ? String(payment.id).trim()
+      : generateUniqueId('pay');
+    const newPayment = { ...payment, id };
 
-      const session = getCurrentSession();
-      mockDb.logAudit(
-        session?.username || 'admin',
-        'Record Payment',
-        `ID: ${newPayment.id}, Merchant: ${newPayment.merchantName}, Paid: ৳${newPayment.paidAmount}`
-      );
-      return { success: true, id: newPayment.id };
-    }
+    return deduplicateMutation(`create_payment_${id}`, async () => {
+      invalidateApiCache('dashboardData');
+      invalidateApiCache('payments');
+      if (isLiveMode()) {
+        return makeJsonpRequest('createPayment', { payment: newPayment });
+      } else {
+        await new Promise(r => setTimeout(r, 100));
+        const payments = mockDb.get('payments', []);
+        // Idempotency: if payment with this ID already exists, do not duplicate
+        if (payments.some(p => String(p.id) === String(id))) {
+          return { success: true, id, duplicatePrevented: true };
+        }
+        payments.push(newPayment);
+        mockDb.set('payments', payments);
+
+        const session = getCurrentSession();
+        mockDb.logAudit(
+          session?.username || 'admin',
+          'Record Payment',
+          `ID: ${newPayment.id}, Merchant: ${newPayment.merchantName}, Paid: ৳${newPayment.paidAmount}`
+        );
+        return { success: true, id: newPayment.id };
+      }
+    });
   },
 
   async updatePayment(payment) {
-    if (isLiveMode()) {
-      return makeJsonpRequest('updatePayment', { payment });
-    } else {
-      await new Promise(r => setTimeout(r, 200));
-      const payments = mockDb.get('payments');
-      const index = payments.findIndex(p => p.id === payment.id);
-      if (index === -1) throw new Error('Payment not found');
-      payments[index] = payment;
-      mockDb.set('payments', payments);
+    if (!payment || !payment.id) throw new Error('Payment ID is required for update');
+    const targetId = String(payment.id).trim();
 
-      const session = getCurrentSession();
-      mockDb.logAudit(
-        session?.username || 'admin',
-        'Update Payment',
-        `ID: ${payment.id}, Merchant: ${payment.merchantName}, Paid: ৳${payment.paidAmount}`
-      );
-      return { success: true };
-    }
+    return deduplicateMutation(`update_payment_${targetId}`, async () => {
+      invalidateApiCache('dashboardData');
+      invalidateApiCache('payments');
+      if (isLiveMode()) {
+        return makeJsonpRequest('updatePayment', { payment: { ...payment, id: targetId } });
+      } else {
+        await new Promise(r => setTimeout(r, 100));
+        const payments = mockDb.get('payments', []);
+        const index = payments.findIndex(p => String(p.id) === targetId);
+        if (index === -1) throw new Error('Payment not found');
+        payments[index] = { ...payment, id: targetId };
+        mockDb.set('payments', payments);
+
+        const session = getCurrentSession();
+        mockDb.logAudit(
+          session?.username || 'admin',
+          'Update Payment',
+          `ID: ${targetId}, Merchant: ${payment.merchantName}, Paid: ৳${payment.paidAmount}`
+        );
+        return { success: true };
+      }
+    });
   },
 
   async deletePayment(id) {
-    if (isLiveMode()) {
-      return makeJsonpRequest('deletePayment', { id });
-    } else {
-      await new Promise(r => setTimeout(r, 200));
-      const payments = mockDb.get('payments');
-      const target = payments.find(p => p.id === id);
-      if (!target) throw new Error('Payment not found');
-
-      const filtered = payments.filter(p => p.id !== id);
-      mockDb.set('payments', filtered);
-
-      const session = getCurrentSession();
-      mockDb.logAudit(
-        session?.username || 'admin',
-        'Delete Payment',
-        `ID: ${id}, Merchant: ${target.merchantName}, Paid: ৳${target.paidAmount}`
-      );
-      return { success: true };
+    if (!id || !String(id).trim()) {
+      throw new Error('Valid payment ID is required for deletion');
     }
+    const targetId = String(id).trim();
+
+    return deduplicateMutation(`delete_payment_${targetId}`, async () => {
+      invalidateApiCache('dashboardData');
+      invalidateApiCache('payments');
+      if (isLiveMode()) {
+        return makeJsonpRequest('deletePayment', { id: targetId });
+      } else {
+        await new Promise(r => setTimeout(r, 100));
+        const payments = mockDb.get('payments', []);
+        const targetIndex = payments.findIndex(p => String(p.id) === targetId);
+        if (targetIndex === -1) throw new Error('Payment not found');
+
+        const target = payments[targetIndex];
+        // Delete ONLY the exact record at targetIndex
+        payments.splice(targetIndex, 1);
+        mockDb.set('payments', payments);
+
+        const session = getCurrentSession();
+        mockDb.logAudit(
+          session?.username || 'admin',
+          'Delete Payment',
+          `ID: ${targetId}, Merchant: ${target.merchantName}, Paid: ৳${target.paidAmount}`
+        );
+        return { success: true };
+      }
+    });
   },
 
   // --- BALANCE TRANSFERS (Hand Cash ↔ Online) ---
-  async getAllTransfers() {
-    if (isLiveMode()) {
-      const resp = await makeJsonpRequest('getTransfers');
-      return resp.transfers || [];
-    } else {
-      await new Promise(r => setTimeout(r, 100));
-      return mockDb.get('transfers', []);
-    }
+  async getAllTransfers({ forceRefresh = false } = {}) {
+    return fetchWithCache(
+      'transfers',
+      async () => {
+        if (isLiveMode()) {
+          const resp = await makeJsonpRequest('getTransfers');
+          const raw = resp.transfers || [];
+          return ensureUniqueListIds(raw, 'tr').items;
+        } else {
+          await new Promise(r => setTimeout(r, 100));
+          const raw = mockDb.get('transfers', []);
+          const { items, wasUpdated } = ensureUniqueListIds(raw, 'tr');
+          if (wasUpdated) mockDb.set('transfers', items);
+          return items;
+        }
+      },
+      DEFAULT_CACHE_TTL,
+      forceRefresh
+    );
   },
 
   async createTransfer(transfer) {
-    if (isLiveMode()) {
-      return makeJsonpRequest('createTransfer', { transfer });
-    } else {
-      await new Promise(r => setTimeout(r, 150));
-      const transfers = mockDb.get('transfers', []);
-      const newTransfer = {
-        ...transfer,
-        id: 't' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
-      };
-      transfers.push(newTransfer);
-      mockDb.set('transfers', transfers);
+    const id = transfer.id && String(transfer.id).trim() !== ''
+      ? String(transfer.id).trim()
+      : generateUniqueId('tr');
+    const newTransfer = { ...transfer, id };
 
-      const session = getCurrentSession();
-      const typeLabel = transfer.type === 'cash_to_online' ? 'Cash → Online' : 'Online → Cash';
-      mockDb.logAudit(
-        session?.username || 'admin',
-        'Balance Transfer',
-        `ID: ${newTransfer.id}, Type: ${typeLabel}, Amount: ৳${newTransfer.amount}, Note: ${newTransfer.note || '—'}`
-      );
-      return { success: true, id: newTransfer.id };
-    }
+    return deduplicateMutation(`create_transfer_${id}`, async () => {
+      invalidateApiCache('dashboardData');
+      invalidateApiCache('transfers');
+      if (isLiveMode()) {
+        return makeJsonpRequest('createTransfer', { transfer: newTransfer });
+      } else {
+        await new Promise(r => setTimeout(r, 100));
+        const transfers = mockDb.get('transfers', []);
+        // Idempotency: if transfer with this ID already exists, do not duplicate
+        if (transfers.some(t => String(t.id) === String(id))) {
+          return { success: true, id, duplicatePrevented: true };
+        }
+        transfers.push(newTransfer);
+        mockDb.set('transfers', transfers);
+
+        const session = getCurrentSession();
+        const typeLabel = transfer.type === 'cash_to_online' ? 'Cash → Online' : 'Online → Cash';
+        mockDb.logAudit(
+          session?.username || 'admin',
+          'Balance Transfer',
+          `ID: ${newTransfer.id}, Type: ${typeLabel}, Amount: ৳${newTransfer.amount}, Note: ${newTransfer.note || '—'}`
+        );
+        return { success: true, id: newTransfer.id };
+      }
+    });
   },
 
   async deleteTransfer(id) {
-    if (isLiveMode()) {
-      return makeJsonpRequest('deleteTransfer', { id });
-    } else {
-      await new Promise(r => setTimeout(r, 150));
-      const transfers = mockDb.get('transfers', []);
-      const target = transfers.find(t => t.id === id);
-      if (!target) throw new Error('Transfer not found');
-
-      const filtered = transfers.filter(t => t.id !== id);
-      mockDb.set('transfers', filtered);
-
-      const session = getCurrentSession();
-      mockDb.logAudit(
-        session?.username || 'admin',
-        'Delete Transfer',
-        `ID: ${id}, Amount: ৳${target.amount}`
-      );
-      return { success: true };
+    if (!id || !String(id).trim()) {
+      throw new Error('Valid transfer ID is required for deletion');
     }
+    const targetId = String(id).trim();
+
+    return deduplicateMutation(`delete_transfer_${targetId}`, async () => {
+      invalidateApiCache('dashboardData');
+      invalidateApiCache('transfers');
+      if (isLiveMode()) {
+        return makeJsonpRequest('deleteTransfer', { id: targetId });
+      } else {
+        await new Promise(r => setTimeout(r, 100));
+        const transfers = mockDb.get('transfers', []);
+        const targetIndex = transfers.findIndex(t => String(t.id) === targetId);
+        if (targetIndex === -1) throw new Error('Transfer not found');
+
+        const target = transfers[targetIndex];
+        // Delete ONLY the exact record at targetIndex
+        transfers.splice(targetIndex, 1);
+        mockDb.set('transfers', transfers);
+
+        const session = getCurrentSession();
+        mockDb.logAudit(
+          session?.username || 'admin',
+          'Delete Transfer',
+          `ID: ${targetId}, Amount: ৳${target.amount}`
+        );
+        return { success: true };
+      }
+    });
   },
 
   // --- RECEIVABLES (Money I Will Receive) ---
-  async getAllReceivables() {
-    if (isLiveMode()) {
-      const resp = await makeJsonpRequest('getReceivables');
-      return resp.receivables || [];
-    } else {
-      await new Promise(r => setTimeout(r, 100));
-      const recs = mockDb.get('receivables', null);
-      if (recs === null) {
-        mockDb.set('receivables', DEFAULT_RECEIVABLES);
-        return DEFAULT_RECEIVABLES;
-      }
-      return recs;
-    }
+  async getAllReceivables({ forceRefresh = false } = {}) {
+    return fetchWithCache(
+      'receivables',
+      async () => {
+        if (isLiveMode()) {
+          const resp = await makeJsonpRequest('getReceivables');
+          const raw = resp.receivables || [];
+          return ensureUniqueListIds(raw, 'recv').items;
+        } else {
+          await new Promise(r => setTimeout(r, 100));
+          const recs = mockDb.get('receivables', null) || DEFAULT_RECEIVABLES;
+          const { items, wasUpdated } = ensureUniqueListIds(recs, 'recv');
+          if (wasUpdated) mockDb.set('receivables', items);
+          return items;
+        }
+      },
+      DEFAULT_CACHE_TTL,
+      forceRefresh
+    );
   },
 
   async createReceivable(receivable) {
-    if (isLiveMode()) {
-      return makePostRequest('createReceivable', { receivable });
-    } else {
-      await new Promise(r => setTimeout(r, 150));
-      const list = mockDb.get('receivables', null) || DEFAULT_RECEIVABLES;
-      const newRec = {
-        ...receivable,
-        id: 'rec_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
-        status: receivable.status || 'Not Received',
-        createdAt: new Date().toISOString(),
-      };
-      const updated = [...list, newRec];
-      mockDb.set('receivables', updated);
+    const id = receivable.id && String(receivable.id).trim() !== ''
+      ? String(receivable.id).trim()
+      : generateUniqueId('recv');
+    const newRec = {
+      ...receivable,
+      id,
+      status: receivable.status || 'Not Received',
+      createdAt: receivable.createdAt || new Date().toISOString(),
+    };
 
-      const session = getCurrentSession();
-      mockDb.logAudit(
-        session?.username || 'admin',
-        'Create Receivable',
-        `ID: ${newRec.id}, Name: ${newRec.name}, Amount: ৳${newRec.amount}`
-      );
-      return { success: true, id: newRec.id };
-    }
+    return deduplicateMutation(`create_receivable_${id}`, async () => {
+      invalidateApiCache('dashboardData');
+      invalidateApiCache('receivables');
+      if (isLiveMode()) {
+        // Use JSONP for CORS reliability
+        return makeJsonpRequest('createReceivable', { receivable: newRec });
+      } else {
+        await new Promise(r => setTimeout(r, 100));
+        const list = mockDb.get('receivables', null) || DEFAULT_RECEIVABLES;
+        // Idempotency
+        if (list.some(r => String(r.id) === String(id))) {
+          return { success: true, id, duplicatePrevented: true };
+        }
+        const updated = [...list, newRec];
+        mockDb.set('receivables', updated);
+
+        const session = getCurrentSession();
+        mockDb.logAudit(
+          session?.username || 'admin',
+          'Create Receivable',
+          `ID: ${newRec.id}, Name: ${newRec.name}, Amount: ৳${newRec.amount}`
+        );
+        return { success: true, id: newRec.id };
+      }
+    });
   },
 
   async updateReceivable(receivable) {
-    if (isLiveMode()) {
-      return makePostRequest('updateReceivable', { receivable });
-    } else {
-      await new Promise(r => setTimeout(r, 150));
-      const list = mockDb.get('receivables', null) || DEFAULT_RECEIVABLES;
-      const idx = list.findIndex(r => r.id === receivable.id);
-      if (idx === -1) throw new Error('Receivable record not found');
+    if (!receivable || !receivable.id) throw new Error('Receivable ID is required for update');
+    const targetId = String(receivable.id).trim();
 
-      const oldRec = list[idx];
-      list[idx] = { ...oldRec, ...receivable };
-      mockDb.set('receivables', list);
+    return deduplicateMutation(`update_receivable_${targetId}`, async () => {
+      invalidateApiCache('dashboardData');
+      invalidateApiCache('receivables');
+      if (isLiveMode()) {
+        return makeJsonpRequest('updateReceivable', { receivable: { ...receivable, id: targetId } });
+      } else {
+        await new Promise(r => setTimeout(r, 100));
+        const list = mockDb.get('receivables', null) || DEFAULT_RECEIVABLES;
+        const idx = list.findIndex(r => String(r.id) === targetId);
+        if (idx === -1) throw new Error('Receivable record not found');
 
-      const session = getCurrentSession();
-      const actionDesc =
-        receivable.status === 'Received' && oldRec.status !== 'Received'
-          ? `Received ৳${receivable.amount} from ${receivable.name} into ${receivable.receivedAccount || 'cash'}`
-          : `Update Receivable: ${receivable.name}, ৳${receivable.amount}`;
+        const oldRec = list[idx];
+        list[idx] = { ...oldRec, ...receivable, id: targetId };
+        mockDb.set('receivables', list);
 
-      mockDb.logAudit(session?.username || 'admin', 'Update Receivable', actionDesc);
-      return { success: true };
-    }
+        const session = getCurrentSession();
+        const actionDesc =
+          receivable.status === 'Received' && oldRec.status !== 'Received'
+            ? `Received ৳${receivable.amount} from ${receivable.name} into ${receivable.receivedAccount || 'cash'}`
+            : `Update Receivable: ${receivable.name}, ৳${receivable.amount}`;
+
+        mockDb.logAudit(session?.username || 'admin', 'Update Receivable', actionDesc);
+        return { success: true };
+      }
+    });
   },
 
   async deleteReceivable(id) {
-    if (isLiveMode()) {
-      return makePostRequest('deleteReceivable', { id });
-    } else {
-      await new Promise(r => setTimeout(r, 150));
-      const list = mockDb.get('receivables', null) || DEFAULT_RECEIVABLES;
-      const target = list.find(r => r.id === id);
-      if (!target) throw new Error('Receivable record not found');
-
-      const filtered = list.filter(r => r.id !== id);
-      mockDb.set('receivables', filtered);
-
-      const session = getCurrentSession();
-      mockDb.logAudit(
-        session?.username || 'admin',
-        'Delete Receivable',
-        `ID: ${id}, Name: ${target.name}, Amount: ৳${target.amount}`
-      );
-      return { success: true };
+    if (!id || !String(id).trim()) {
+      throw new Error('Valid receivable ID is required for deletion');
     }
+    const targetId = String(id).trim();
+
+    return deduplicateMutation(`delete_receivable_${targetId}`, async () => {
+      invalidateApiCache('dashboardData');
+      invalidateApiCache('receivables');
+      if (isLiveMode()) {
+        return makeJsonpRequest('deleteReceivable', { id: targetId });
+      } else {
+        await new Promise(r => setTimeout(r, 100));
+        const list = mockDb.get('receivables', null) || DEFAULT_RECEIVABLES;
+        const targetIndex = list.findIndex(r => String(r.id) === targetId);
+        if (targetIndex === -1) throw new Error('Receivable record not found');
+
+        const target = list[targetIndex];
+        // Delete ONLY the exact record at targetIndex
+        list.splice(targetIndex, 1);
+        mockDb.set('receivables', list);
+
+        const session = getCurrentSession();
+        mockDb.logAudit(
+          session?.username || 'admin',
+          'Delete Receivable',
+          `ID: ${targetId}, Name: ${target.name}, Amount: ৳${target.amount}`
+        );
+        return { success: true };
+      }
+    });
   },
 
   // --- PAYABLES (Money I Owe) ---
-  async getAllPayables() {
-    if (isLiveMode()) {
-      const resp = await makeJsonpRequest('getPayables');
-      return resp.payables || [];
-    } else {
-      await new Promise(r => setTimeout(r, 100));
-      const pays = mockDb.get('payables', null);
-      if (pays === null) {
-        mockDb.set('payables', DEFAULT_PAYABLES);
-        return DEFAULT_PAYABLES;
-      }
-      return pays;
-    }
+  async getAllPayables({ forceRefresh = false } = {}) {
+    return fetchWithCache(
+      'payables',
+      async () => {
+        if (isLiveMode()) {
+          const resp = await makeJsonpRequest('getPayables');
+          const raw = resp.payables || [];
+          return ensureUniqueListIds(raw, 'payab').items;
+        } else {
+          await new Promise(r => setTimeout(r, 100));
+          const pays = mockDb.get('payables', null) || DEFAULT_PAYABLES;
+          const { items, wasUpdated } = ensureUniqueListIds(pays, 'payab');
+          if (wasUpdated) mockDb.set('payables', items);
+          return items;
+        }
+      },
+      DEFAULT_CACHE_TTL,
+      forceRefresh
+    );
   },
 
   async createPayable(payable) {
-    if (isLiveMode()) {
-      return makePostRequest('createPayable', { payable });
-    } else {
-      await new Promise(r => setTimeout(r, 150));
-      const list = mockDb.get('payables', null) || DEFAULT_PAYABLES;
-      const newPay = {
-        ...payable,
-        id: 'pay_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
-        status: payable.status || 'Unpaid',
-        createdAt: new Date().toISOString(),
-      };
-      const updated = [...list, newPay];
-      mockDb.set('payables', updated);
+    const id = payable.id && String(payable.id).trim() !== ''
+      ? String(payable.id).trim()
+      : generateUniqueId('payab');
+    const newPay = {
+      ...payable,
+      id,
+      status: payable.status || 'Unpaid',
+      createdAt: payable.createdAt || new Date().toISOString(),
+    };
 
-      const session = getCurrentSession();
-      mockDb.logAudit(
-        session?.username || 'admin',
-        'Create Payable',
-        `ID: ${newPay.id}, Name: ${newPay.name}, Amount: ৳${newPay.amount}`
-      );
-      return { success: true, id: newPay.id };
-    }
+    return deduplicateMutation(`create_payable_${id}`, async () => {
+      invalidateApiCache('dashboardData');
+      invalidateApiCache('payables');
+      if (isLiveMode()) {
+        return makeJsonpRequest('createPayable', { payable: newPay });
+      } else {
+        await new Promise(r => setTimeout(r, 100));
+        const list = mockDb.get('payables', null) || DEFAULT_PAYABLES;
+        // Idempotency
+        if (list.some(p => String(p.id) === String(id))) {
+          return { success: true, id, duplicatePrevented: true };
+        }
+        const updated = [...list, newPay];
+        mockDb.set('payables', updated);
+
+        const session = getCurrentSession();
+        mockDb.logAudit(
+          session?.username || 'admin',
+          'Create Payable',
+          `ID: ${newPay.id}, Name: ${newPay.name}, Amount: ৳${newPay.amount}`
+        );
+        return { success: true, id: newPay.id };
+      }
+    });
   },
 
   async updatePayable(payable) {
-    if (isLiveMode()) {
-      return makePostRequest('updatePayable', { payable });
-    } else {
-      await new Promise(r => setTimeout(r, 150));
-      const list = mockDb.get('payables', null) || DEFAULT_PAYABLES;
-      const idx = list.findIndex(p => p.id === payable.id);
-      if (idx === -1) throw new Error('Payable record not found');
+    if (!payable || !payable.id) throw new Error('Payable ID is required for update');
+    const targetId = String(payable.id).trim();
 
-      const oldPay = list[idx];
-      list[idx] = { ...oldPay, ...payable };
-      mockDb.set('payables', list);
+    return deduplicateMutation(`update_payable_${targetId}`, async () => {
+      invalidateApiCache('dashboardData');
+      invalidateApiCache('payables');
+      if (isLiveMode()) {
+        return makeJsonpRequest('updatePayable', { payable: { ...payable, id: targetId } });
+      } else {
+        await new Promise(r => setTimeout(r, 100));
+        const list = mockDb.get('payables', null) || DEFAULT_PAYABLES;
+        const idx = list.findIndex(p => String(p.id) === targetId);
+        if (idx === -1) throw new Error('Payable record not found');
 
-      const session = getCurrentSession();
-      const actionDesc =
-        payable.status === 'Paid' && oldPay.status !== 'Paid'
-          ? `Paid ৳${payable.amount} to ${payable.name} from ${payable.paidAccount || 'cash'}`
-          : `Update Payable: ${payable.name}, ৳${payable.amount}`;
+        const oldPay = list[idx];
+        list[idx] = { ...oldPay, ...payable, id: targetId };
+        mockDb.set('payables', list);
 
-      mockDb.logAudit(session?.username || 'admin', 'Update Payable', actionDesc);
-      return { success: true };
-    }
+        const session = getCurrentSession();
+        const actionDesc =
+          payable.status === 'Paid' && oldPay.status !== 'Paid'
+            ? `Paid ৳${payable.amount} to ${payable.name} from ${payable.paidAccount || 'cash'}`
+            : `Update Payable: ${payable.name}, ৳${payable.amount}`;
+
+        mockDb.logAudit(session?.username || 'admin', 'Update Payable', actionDesc);
+        return { success: true };
+      }
+    });
   },
 
   async deletePayable(id) {
-    if (isLiveMode()) {
-      return makePostRequest('deletePayable', { id });
-    } else {
-      await new Promise(r => setTimeout(r, 150));
-      const list = mockDb.get('payables', null) || DEFAULT_PAYABLES;
-      const target = list.find(p => p.id === id);
-      if (!target) throw new Error('Payable record not found');
-
-      const filtered = list.filter(p => p.id !== id);
-      mockDb.set('payables', filtered);
-
-      const session = getCurrentSession();
-      mockDb.logAudit(
-        session?.username || 'admin',
-        'Delete Payable',
-        `ID: ${id}, Name: ${target.name}, Amount: ৳${target.amount}`
-      );
-      return { success: true };
+    if (!id || !String(id).trim()) {
+      throw new Error('Valid payable ID is required for deletion');
     }
+    const targetId = String(id).trim();
+
+    return deduplicateMutation(`delete_payable_${targetId}`, async () => {
+      invalidateApiCache('dashboardData');
+      invalidateApiCache('payables');
+      if (isLiveMode()) {
+        return makeJsonpRequest('deletePayable', { id: targetId });
+      } else {
+        await new Promise(r => setTimeout(r, 100));
+        const list = mockDb.get('payables', null) || DEFAULT_PAYABLES;
+        const targetIndex = list.findIndex(p => String(p.id) === targetId);
+        if (targetIndex === -1) throw new Error('Payable record not found');
+
+        const target = list[targetIndex];
+        // Delete ONLY the exact record at targetIndex
+        list.splice(targetIndex, 1);
+        mockDb.set('payables', list);
+
+        const session = getCurrentSession();
+        mockDb.logAudit(
+          session?.username || 'admin',
+          'Delete Payable',
+          `ID: ${targetId}, Name: ${target.name}, Amount: ৳${target.amount}`
+        );
+        return { success: true };
+      }
+    });
   },
 
   // --- OPENING BALANCES (One record per calendar month) ---
@@ -954,24 +1289,32 @@ export const api = {
     }
   },
 
-  async getOpeningBalances() {
-    if (isLiveMode()) {
-      const resp = await makeJsonpRequest('getOpeningBalances');
-      return resp.openingBalances || [];
-    } else {
-      await new Promise(r => setTimeout(r, 100));
-      this._migrateLegacyOpeningBalance();
-      const list = mockDb.get('openingBalances', []);
-      // Keep a single record per month — if duplicates ever sneak in, keep the newest
-      return Array.from(new Map(list.map(o => [o.monthKey, o])).values());
-    }
+  async getOpeningBalances({ forceRefresh = false } = {}) {
+    return fetchWithCache(
+      'openingBalances',
+      async () => {
+        if (isLiveMode()) {
+          const resp = await makeJsonpRequest('getOpeningBalances');
+          return resp.openingBalances || [];
+        } else {
+          await new Promise(r => setTimeout(r, 100));
+          this._migrateLegacyOpeningBalance();
+          const list = mockDb.get('openingBalances', []);
+          return Array.from(new Map(list.map(o => [o.monthKey, o])).values());
+        }
+      },
+      DEFAULT_CACHE_TTL,
+      forceRefresh
+    );
   },
 
   async setOpeningBalance(entry) {
+    invalidateApiCache('dashboardData');
+    invalidateApiCache('openingBalances');
     if (isLiveMode()) {
       return makePostRequest('setOpeningBalance', { entry });
     } else {
-      await new Promise(r => setTimeout(r, 150));
+      await new Promise(r => setTimeout(r, 100));
       if (!entry || !entry.monthKey) throw new Error('Opening balance requires a month key.');
 
       const currentMonthKey = getCurrentMonthKey();
@@ -1038,22 +1381,70 @@ export const api = {
     }
   },
 
-  // --- MONTH CLOSINGS ---
-  async getAllMonthClosings() {
+  async deleteOpeningBalance(entry) {
+    invalidateApiCache('dashboardData');
+    invalidateApiCache('openingBalances');
+    const id = entry && entry.id ? String(entry.id) : null;
+    const monthKey = entry && entry.monthKey ? String(entry.monthKey) : null;
     if (isLiveMode()) {
-      const resp = await makeJsonpRequest('getMonthClosings');
-      return resp.monthClosings || [];
+      return makeJsonpRequest('deleteOpeningBalance', { id, monthKey });
     } else {
       await new Promise(r => setTimeout(r, 100));
-      return mockDb.get('monthClosings', []);
+      if (!id && !monthKey) throw new Error('Opening balance requires a month key.');
+
+      const currentMonthKey = getCurrentMonthKey();
+      // Previous months must remain unchanged
+      if (monthKey && String(monthKey).slice(0, 7) < currentMonthKey) {
+        throw new Error('Opening balance for past months cannot be removed.');
+      }
+
+      const list = mockDb.get('openingBalances', []);
+      // Tolerant month match: accepts "2026-09" against stored "2026-09-01T…"
+      const index = list.findIndex(o =>
+        (id && o.id === id) ||
+        (monthKey && (o.monthKey === monthKey || String(o.monthKey).slice(0, 7) === String(monthKey).slice(0, 7)))
+      );
+      if (index === -1) throw new Error('Opening balance not found.');
+
+      const target = list[index];
+      list.splice(index, 1);
+      mockDb.set('openingBalances', list);
+
+      const session = getCurrentSession();
+      mockDb.logAudit(
+        session?.username || 'admin',
+        'Delete Opening Balance',
+        `Month: ${target.monthKey} — Total: ৳${target.totalCash}`
+      );
+      return { success: true };
     }
   },
 
+  // --- MONTH CLOSINGS ---
+  async getAllMonthClosings({ forceRefresh = false } = {}) {
+    return fetchWithCache(
+      'monthClosings',
+      async () => {
+        if (isLiveMode()) {
+          const resp = await makeJsonpRequest('getMonthClosings');
+          return resp.monthClosings || [];
+        } else {
+          await new Promise(r => setTimeout(r, 100));
+          return mockDb.get('monthClosings', []);
+        }
+      },
+      DEFAULT_CACHE_TTL,
+      forceRefresh
+    );
+  },
+
   async createMonthClosing(entry) {
+    invalidateApiCache('dashboardData');
+    invalidateApiCache('monthClosings');
     if (isLiveMode()) {
       return makePostRequest('createMonthClosing', { entry });
     } else {
-      await new Promise(r => setTimeout(r, 150));
+      await new Promise(r => setTimeout(r, 100));
       const list = mockDb.get('monthClosings', []);
       // Duplicate guard — one closing per calendar month
       if (list.some(c => c.monthKey === entry.monthKey)) {
@@ -1071,45 +1462,61 @@ export const api = {
       mockDb.logAudit(
         session?.username || 'admin',
         'Month Closing',
-        `Closed ${entry.month} ${entry.year} — Total: ৳${entry.totalCash} (Hand: ৳${entry.handCash}, Online: ৳${entry.onlineCash}, Other: ৳${entry.otherCash})`
+        `Closed ${entry.month} ${entry.year} — Total: ৳${entry.totalCash} (Hand: ৳${entry.handCash}, Online: ৳${entry.onlineCash}, Other: ৳${otherCash})`
       );
       return { success: true, id: newEntry.id };
     }
   },
 
   // --- MERCHANT RETRIEVAL ---
-  async getMerchants() {
-    if (isLiveMode()) {
-      const resp = await makeJsonpRequest('getMerchants');
-      return resp.merchants || [];
-    } else {
-      const records = mockDb.get('records');
-      const payments = mockDb.get('payments');
-      const seeded = mockDb.get('merchants');
+  async getMerchants({ forceRefresh = false } = {}) {
+    return fetchWithCache(
+      'merchants',
+      async () => {
+        if (isLiveMode()) {
+          const resp = await makeJsonpRequest('getMerchants');
+          return resp.merchants || [];
+        } else {
+          const records = mockDb.get('records');
+          const payments = mockDb.get('payments');
+          const seeded = mockDb.get('merchants');
 
-      const set = new Set([...seeded]);
-      records.forEach(r => r.merchantName && set.add(r.merchantName));
-      payments.forEach(p => p.merchantName && set.add(p.merchantName));
-      return Array.from(set).sort();
-    }
+          const set = new Set([...seeded]);
+          records.forEach(r => r.merchantName && set.add(r.merchantName));
+          payments.forEach(p => p.merchantName && set.add(p.merchantName));
+          return Array.from(set).sort();
+        }
+      },
+      DEFAULT_CACHE_TTL,
+      forceRefresh
+    );
   },
 
   // --- ADMIN ACTIONS (USERS & AUDIT) ---
-  async getUsers() {
-    if (isLiveMode()) {
-      const resp = await makeJsonpRequest('getUsers');
-      return resp.users || [];
-    } else {
-      await new Promise(r => setTimeout(r, 200));
-      return mockDb.get('users').map(({ username, role, status }) => ({ username, role, status }));
-    }
+  async getUsers({ forceRefresh = false } = {}) {
+    return fetchWithCache(
+      'users',
+      async () => {
+        if (isLiveMode()) {
+          const resp = await makeJsonpRequest('getUsers');
+          return resp.users || [];
+        } else {
+          await new Promise(r => setTimeout(r, 100));
+          return mockDb.get('users').map(({ username, role, status }) => ({ username, role, status }));
+        }
+      },
+      60000,
+      forceRefresh
+    );
   },
 
   async createUser(user) {
+    invalidateApiCache('users');
+    invalidateApiCache('auditLogs');
     if (isLiveMode()) {
       return makeJsonpRequest('createUser', { user });
     } else {
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise(r => setTimeout(r, 100));
       const users = mockDb.get('users');
       if (users.some(u => u.username.toLowerCase() === user.username.toLowerCase())) {
         throw new Error('Username already exists');
@@ -1137,10 +1544,12 @@ export const api = {
   },
 
   async updateUser(user) {
+    invalidateApiCache('users');
+    invalidateApiCache('auditLogs');
     if (isLiveMode()) {
       return makeJsonpRequest('updateUser', { user });
     } else {
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise(r => setTimeout(r, 100));
       const users = mockDb.get('users');
       const index = users.findIndex(u => u.username.toLowerCase() === user.username.toLowerCase());
       if (index === -1) throw new Error('User not found');
@@ -1165,10 +1574,12 @@ export const api = {
   },
 
   async deleteUser(targetUsername) {
+    invalidateApiCache('users');
+    invalidateApiCache('auditLogs');
     if (isLiveMode()) {
       return makeJsonpRequest('deleteUser', { targetUsername });
     } else {
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise(r => setTimeout(r, 100));
       const users = mockDb.get('users');
       const filtered = users.filter(u => u.username.toLowerCase() !== targetUsername.toLowerCase());
       mockDb.set('users', filtered);
@@ -1179,91 +1590,139 @@ export const api = {
     }
   },
 
-  async getAuditLogs() {
-    if (isLiveMode()) {
-      const resp = await makeJsonpRequest('getAuditLogs');
-      return resp.logs || [];
-    } else {
-      await new Promise(r => setTimeout(r, 200));
-      return mockDb.get('audit');
-    }
+  async getAuditLogs({ forceRefresh = false } = {}) {
+    return fetchWithCache(
+      'auditLogs',
+      async () => {
+        if (isLiveMode()) {
+          const resp = await makeJsonpRequest('getAuditLogs');
+          return resp.logs || [];
+        } else {
+          await new Promise(r => setTimeout(r, 100));
+          return mockDb.get('audit');
+        }
+      },
+      30000,
+      forceRefresh
+    );
   },
 
   // --- OTHER CASH RECORDS (Separate from Sales Records) ---
-  async getAllOtherCashRecords() {
-    if (isLiveMode()) {
-      const resp = await makeJsonpRequest('getOtherCashRecords');
-      return resp.otherCashRecords || [];
-    } else {
-      await new Promise(r => setTimeout(r, 100));
-      return mockDb.get('otherCashRecords', []);
-    }
+  async getAllOtherCashRecords({ forceRefresh = false } = {}) {
+    return fetchWithCache(
+      'otherCashRecords',
+      async () => {
+        if (isLiveMode()) {
+          const resp = await makeJsonpRequest('getOtherCashRecords');
+          const raw = resp.otherCashRecords || [];
+          return ensureUniqueListIds(raw, 'oc').items;
+        } else {
+          await new Promise(r => setTimeout(r, 100));
+          const raw = mockDb.get('otherCashRecords', []);
+          const { items, wasUpdated } = ensureUniqueListIds(raw, 'oc');
+          if (wasUpdated) mockDb.set('otherCashRecords', items);
+          return items;
+        }
+      },
+      DEFAULT_CACHE_TTL,
+      forceRefresh
+    );
   },
 
   async createOtherCashRecord(record) {
-    if (isLiveMode()) {
-      return makePostRequest('createOtherCashRecord', { record });
-    } else {
-      await new Promise(r => setTimeout(r, 150));
-      const list = mockDb.get('otherCashRecords', []);
-      const newRecord = {
-        ...record,
-        id: record.id || 'oc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
-        createdAt: record.createdAt || new Date().toISOString(),
-      };
-      const updated = [...list, newRecord];
-      mockDb.set('otherCashRecords', updated);
+    const id = record.id && String(record.id).trim() !== ''
+      ? String(record.id).trim()
+      : generateUniqueId('oc');
+    const newRecord = {
+      ...record,
+      id,
+      createdAt: record.createdAt || new Date().toISOString(),
+    };
 
-      const session = getCurrentSession();
-      mockDb.logAudit(
-        session?.username || 'admin',
-        'Create Other Cash Record',
-        `ID: ${newRecord.id}, Type: ${newRecord.type}, Source: ${newRecord.source}, Amount: ৳${newRecord.amount}`
-      );
-      return { success: true, id: newRecord.id };
-    }
+    return deduplicateMutation(`create_other_cash_${id}`, async () => {
+      invalidateApiCache('dashboardData');
+      invalidateApiCache('otherCashRecords');
+      if (isLiveMode()) {
+        return makeJsonpRequest('createOtherCashRecord', { record: newRecord });
+      } else {
+        await new Promise(r => setTimeout(r, 100));
+        const list = mockDb.get('otherCashRecords', []);
+        // Idempotency: if record with this ID already exists, do not duplicate
+        if (list.some(r => String(r.id) === String(id))) {
+          return { success: true, id, duplicatePrevented: true };
+        }
+        const updated = [...list, newRecord];
+        mockDb.set('otherCashRecords', updated);
+
+        const session = getCurrentSession();
+        mockDb.logAudit(
+          session?.username || 'admin',
+          'Create Other Cash Record',
+          `ID: ${newRecord.id}, Type: ${newRecord.type}, Source: ${newRecord.source}, Amount: ৳${newRecord.amount}`
+        );
+        return { success: true, id: newRecord.id };
+      }
+    });
   },
 
   async updateOtherCashRecord(record) {
-    if (isLiveMode()) {
-      return makePostRequest('updateOtherCashRecord', { record });
-    } else {
-      await new Promise(r => setTimeout(r, 150));
-      const list = mockDb.get('otherCashRecords', []);
-      const idx = list.findIndex(r => r.id === record.id);
-      if (idx === -1) throw new Error('Other cash record not found');
-      list[idx] = record;
-      mockDb.set('otherCashRecords', list);
+    if (!record || !record.id) throw new Error('Other cash record ID is required for update');
+    const targetId = String(record.id).trim();
 
-      const session = getCurrentSession();
-      mockDb.logAudit(
-        session?.username || 'admin',
-        'Update Other Cash Record',
-        `ID: ${record.id}, Type: ${record.type}, Source: ${record.source}, Amount: ৳${record.amount}`
-      );
-      return { success: true };
-    }
+    return deduplicateMutation(`update_other_cash_${targetId}`, async () => {
+      invalidateApiCache('dashboardData');
+      invalidateApiCache('otherCashRecords');
+      if (isLiveMode()) {
+        return makeJsonpRequest('updateOtherCashRecord', { record: { ...record, id: targetId } });
+      } else {
+        await new Promise(r => setTimeout(r, 100));
+        const list = mockDb.get('otherCashRecords', []);
+        const idx = list.findIndex(r => String(r.id) === targetId);
+        if (idx === -1) throw new Error('Other cash record not found');
+        list[idx] = { ...record, id: targetId };
+        mockDb.set('otherCashRecords', list);
+
+        const session = getCurrentSession();
+        mockDb.logAudit(
+          session?.username || 'admin',
+          'Update Other Cash Record',
+          `ID: ${targetId}, Type: ${record.type}, Source: ${record.source}, Amount: ৳${record.amount}`
+        );
+        return { success: true };
+      }
+    });
   },
 
   async deleteOtherCashRecord(id) {
-    if (isLiveMode()) {
-      return makePostRequest('deleteOtherCashRecord', { id });
-    } else {
-      await new Promise(r => setTimeout(r, 150));
-      const list = mockDb.get('otherCashRecords', []);
-      const target = list.find(r => r.id === id);
-      if (!target) throw new Error('Other cash record not found');
-
-      const filtered = list.filter(r => r.id !== id);
-      mockDb.set('otherCashRecords', filtered);
-
-      const session = getCurrentSession();
-      mockDb.logAudit(
-        session?.username || 'admin',
-        'Delete Other Cash Record',
-        `ID: ${id}, Type: ${target.type}, Source: ${target.source}, Amount: ৳${target.amount}`
-      );
-      return { success: true };
+    if (!id || !String(id).trim()) {
+      throw new Error('Valid other cash record ID is required for deletion');
     }
+    const targetId = String(id).trim();
+
+    return deduplicateMutation(`delete_other_cash_${targetId}`, async () => {
+      invalidateApiCache('dashboardData');
+      invalidateApiCache('otherCashRecords');
+      if (isLiveMode()) {
+        return makeJsonpRequest('deleteOtherCashRecord', { id: targetId });
+      } else {
+        await new Promise(r => setTimeout(r, 100));
+        const list = mockDb.get('otherCashRecords', []);
+        const targetIndex = list.findIndex(r => String(r.id) === targetId);
+        if (targetIndex === -1) throw new Error('Other cash record not found');
+
+        const target = list[targetIndex];
+        // Delete ONLY the exact record at targetIndex
+        list.splice(targetIndex, 1);
+        mockDb.set('otherCashRecords', list);
+
+        const session = getCurrentSession();
+        mockDb.logAudit(
+          session?.username || 'admin',
+          'Delete Other Cash Record',
+          `ID: ${targetId}, Type: ${target.type}, Source: ${target.source}, Amount: ৳${target.amount}`
+        );
+        return { success: true };
+      }
+    });
   },
 };

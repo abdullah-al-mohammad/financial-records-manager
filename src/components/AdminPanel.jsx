@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Users, 
   Shield, 
@@ -33,22 +33,30 @@ export default function AdminPanel({ currentUser, onShowToast }) {
   const [logPage, setLogPage] = useState(1);
   const logsPerPage = 15;
 
-  const [loading, setLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false); // background data refresh — data stays visible
+  const [isSubmitting, setIsSubmitting] = useState(false); // form mutation in progress
+  const hasLoadedRef = useRef(false);
 
   // Load Admin Data
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async ({ silent = false } = {}) => {
+    // First load: wait visibly. Subsequent refreshes: silent (data stays visible).
+    if (!hasLoadedRef.current) {
+      setIsRefreshing(true);
+    } else if (!silent) {
+      setIsRefreshing(true);
+    }
     try {
       const [uData, lData] = await Promise.all([
-        api.getUsers(),
-        api.getAuditLogs()
+        api.getUsers({ forceRefresh: true }),
+        api.getAuditLogs({ forceRefresh: true })
       ]);
       setUsers(uData);
       setLogs(lData);
+      hasLoadedRef.current = true;
     } catch (err) {
       onShowToast(`Failed to load admin controls: ${err.message}`, 'error');
     } finally {
-      setLoading(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -63,7 +71,7 @@ export default function AdminPanel({ currentUser, onShowToast }) {
       return;
     }
 
-    setLoading(true);
+    setIsSubmitting(true);
     try {
       if (editingUsername) {
         // Edit Existing User
@@ -94,12 +102,12 @@ export default function AdminPanel({ currentUser, onShowToast }) {
       setEditingUsername(null);
       setShowAddForm(false);
       
-      // Reload lists
-      await loadData();
+      // Reload lists silently (keep existing data visible)
+      await loadData({ silent: true });
     } catch (err) {
       onShowToast(err.message || 'Failed to save user', 'error');
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -121,15 +129,15 @@ export default function AdminPanel({ currentUser, onShowToast }) {
 
     if (!window.confirm(`Delete user account "${targetUser}" permanently from database?`)) return;
 
-    setLoading(true);
+    setIsSubmitting(true);
     try {
       await api.deleteUser(targetUser);
       onShowToast(`User "${targetUser}" deleted successfully.`);
-      await loadData();
+      await loadData({ silent: true });
     } catch (err) {
       onShowToast(err.message || 'Delete failed', 'error');
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -185,11 +193,11 @@ export default function AdminPanel({ currentUser, onShowToast }) {
 
         {/* Reload button */}
         <button
-          onClick={loadData}
-          disabled={loading}
-          className="bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 px-3.5 py-1.5 rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer"
+          onClick={() => loadData()}
+          disabled={isRefreshing}
+          className="bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 px-3.5 py-1.5 rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer disabled:opacity-60"
         >
-          {loading ? 'Refreshing...' : 'Refresh Logs'}
+          {isRefreshing ? 'Refreshing...' : 'Refresh Logs'}
         </button>
       </div>
 
@@ -315,10 +323,10 @@ export default function AdminPanel({ currentUser, onShowToast }) {
                   </button>
                   <button
                     type="submit"
-                    disabled={loading}
-                    className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-indigo-600/10 transition-all cursor-pointer"
+                    disabled={isSubmitting}
+                    className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-xl text-xs font-semibold shadow-lg shadow-indigo-600/10 transition-all cursor-pointer"
                   >
-                    {editingUsername ? 'Commit Changes' : 'Register Account'}
+                    {isSubmitting ? 'Saving...' : editingUsername ? 'Commit Changes' : 'Register Account'}
                   </button>
                 </div>
               </form>

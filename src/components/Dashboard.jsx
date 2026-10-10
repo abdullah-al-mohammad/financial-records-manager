@@ -24,10 +24,11 @@ import {
   Wallet,
   X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import DatePicker from 'react-datepicker';
 import { format } from 'date-fns';
 import { computeNetCashBalance } from '../utils/finance';
+import { generateUniqueId } from '../utils/api';
 
 export default function Dashboard({
   records,
@@ -44,6 +45,7 @@ export default function Dashboard({
   currentOpeningBalance = null,
   onAddMonthClosing,
   onSetOpeningBalance,
+  onDeleteOpeningBalance,
 }) {
   const MONTHS_ORDER = [
     'January',
@@ -117,10 +119,12 @@ export default function Dashboard({
   const [transferDate, setTransferDate] = useState(new Date().toISOString().slice(0, 10));
   const [transferNote, setTransferNote] = useState('');
   const [transferSubmitting, setTransferSubmitting] = useState(false);
+  const transferSubmittingRef = useRef(false);
 
   // Month Closing modal state
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [closeSubmitting, setCloseSubmitting] = useState(false);
+  const closeSubmittingRef = useRef(false);
   const [showClosingHistory, setShowClosingHistory] = useState(false);
 
   // Opening Balance modal state (one record per calendar month)
@@ -131,6 +135,7 @@ export default function Dashboard({
   const [obSource, setObSource] = useState('manual');
   const [obFromMonthKey, setObFromMonthKey] = useState(null);
   const [obSubmitting, setObSubmitting] = useState(false);
+  const obSubmittingRef = useRef(false);
   const [showOpeningHistory, setShowOpeningHistory] = useState(false);
 
   // Derive current month key and check if already closed
@@ -179,12 +184,14 @@ export default function Dashboard({
   };
 
   const handleSaveOpeningBalance = async () => {
+    if (obSubmittingRef.current || obSubmitting) return;
     const handCash = parseFloat(obHand) || 0;
     const onlineCash = parseFloat(obOnline) || 0;
     const otherCash = parseFloat(obOther) || 0;
+    obSubmittingRef.current = true;
     setObSubmitting(true);
     try {
-      await onSetOpeningBalance({
+      const success = await onSetOpeningBalance({
         monthKey: currentMonthKey,
         month: currentMonthName,
         year: currentYear,
@@ -195,16 +202,43 @@ export default function Dashboard({
         source: obSource,
         fromMonthKey: obFromMonthKey || null,
       });
-      setShowOpeningModal(false);
+      if (success !== false) {
+        setShowOpeningModal(false);
+      }
     } finally {
+      obSubmittingRef.current = false;
+      setObSubmitting(false);
+    }
+  };
+
+  const handleRemoveOpeningBalance = async () => {
+    if (!resolvedOpeningBalance) return;
+    if (obSubmittingRef.current || obSubmitting) return;
+    if (!window.confirm(
+      `Remove this month's opening balance? Cash balances will be recalculated without the opening amount. This cannot be undone.`
+    )) return;
+    obSubmittingRef.current = true;
+    setObSubmitting(true);
+    try {
+      const success = await onDeleteOpeningBalance({
+        id: resolvedOpeningBalance.id,
+        monthKey: resolvedOpeningBalance.monthKey || currentMonthKey,
+      });
+      if (success !== false) {
+        setShowOpeningModal(false);
+      }
+    } finally {
+      obSubmittingRef.current = false;
       setObSubmitting(false);
     }
   };
 
   const handleCloseMonth = async () => {
+    if (closeSubmittingRef.current || closeSubmitting) return;
+    closeSubmittingRef.current = true;
     setCloseSubmitting(true);
     try {
-      await onAddMonthClosing({
+      const success = await onAddMonthClosing({
         month: currentMonthName,
         year: currentYear,
         monthKey: currentMonthKey,
@@ -213,8 +247,11 @@ export default function Dashboard({
         otherCash: paymentTotals.otherCash,
         totalCash: paymentTotals.totalCash,
       });
-      setShowCloseModal(false);
+      if (success !== false) {
+        setShowCloseModal(false);
+      }
     } finally {
+      closeSubmittingRef.current = false;
       setCloseSubmitting(false);
     }
   };
@@ -983,6 +1020,13 @@ export default function Dashboard({
                   className="text-[10px] font-semibold text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer"
                 >
                   Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRemoveOpeningBalance}
+                  className="text-[10px] font-semibold text-rose-400 hover:text-rose-300 transition-colors cursor-pointer"
+                >
+                  Remove
                 </button>
               </div>
             </div>
@@ -1785,19 +1829,25 @@ export default function Dashboard({
               </button>
               <button
                 onClick={async () => {
+                  if (transferSubmittingRef.current || transferSubmitting) return;
                   if (!transferAmount || parseFloat(transferAmount) <= 0) return;
+                  transferSubmittingRef.current = true;
                   setTransferSubmitting(true);
                   try {
-                    await onAddTransfer({
+                    const success = await onAddTransfer({
+                      id: generateUniqueId('tr'),
                       type: transferType,
                       amount: String(parseFloat(transferAmount)),
                       date: transferDate,
                       note: transferNote,
                     });
-                    setTransferAmount('');
-                    setTransferNote('');
-                    setShowTransferModal(false);
+                    if (success !== false) {
+                      setTransferAmount('');
+                      setTransferNote('');
+                      setShowTransferModal(false);
+                    }
                   } finally {
+                    transferSubmittingRef.current = false;
                     setTransferSubmitting(false);
                   }
                 }}

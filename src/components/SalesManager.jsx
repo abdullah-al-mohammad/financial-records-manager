@@ -1,9 +1,10 @@
 import { Calendar, Edit2, Plus, Search, SlidersHorizontal, Trash2, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import DatePicker from 'react-datepicker';
 import { format } from 'date-fns';
 import { toast } from 'react-toastify';
 import { sortRecordsByDateDesc } from '../utils/dates';
+import { generateUniqueId } from '../utils/api';
 
 const MONTHS = [
   'January',
@@ -85,6 +86,7 @@ export default function SalesManager({
   onAddRecord,
   onUpdateRecord,
   onDeleteRecord,
+  onDeleteAllRecords,
   onAddMerchant,
   editTarget,
   clearEditTarget,
@@ -93,6 +95,7 @@ export default function SalesManager({
   const [form, setForm] = useState(defaultForm);
   const [editingId, setEditingId] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   useEffect(() => {
     if (editTarget) {
@@ -172,17 +175,21 @@ export default function SalesManager({
 
   const handleSubmit = async e => {
     e.preventDefault();
-    if (isSubmitting) return;
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
+
     if (!editingId && form.salesAmount && form.salesAmount !== '' && !form.merchantName) {
       toast.error('Merchant name is required for sales records');
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
       return;
     }
 
-    // Build payload with only user-editable fields
+    // Build payload with guaranteed permanent unique ID
+    const recordId = editingId || generateUniqueId('rec');
     const payload = {
-      id: editingId || String(Date.now()),
+      id: recordId,
       date: form.date,
       month: form.month,
       merchantName: form.merchantName,
@@ -212,15 +219,21 @@ export default function SalesManager({
     }
 
     try {
+      let success;
       if (editingId) {
-        await onUpdateRecord(payload);
+        success = await onUpdateRecord(payload);
       } else {
-        await onAddRecord(payload);
+        success = await onAddRecord(payload);
       }
+      if (success !== false) {
+        setIsOpen(false);
+        setForm(defaultForm);
+        setEditingId(null);
+      }
+    } catch (err) {
+      toast.error(err.message || 'Failed to save sales record');
     } finally {
-      setIsOpen(false);
-      setForm(defaultForm);
-      setEditingId(null);
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -234,17 +247,23 @@ export default function SalesManager({
     }
   };
 
-  const visibleRecords = useMemo(
-    () =>
-      sortRecordsByDateDesc(
-        records.filter(
-          r =>
-            (parseFloat(r.salesAmount) || 0) > 0 ||
-            (parseFloat(r.deliveryCharge) || 0) > 0
-        )
-      ),
-    [records]
-  );
+  const visibleRecords = useMemo(() => {
+    const seen = new Set();
+    const unique = [];
+    for (const r of records || []) {
+      if (!r) continue;
+      const idKey = r.id !== undefined && r.id !== null ? String(r.id).trim() : '';
+      if (idKey && seen.has(idKey)) continue;
+      if (idKey) seen.add(idKey);
+      if (
+        (parseFloat(r.salesAmount) || 0) > 0 ||
+        (parseFloat(r.deliveryCharge) || 0) > 0
+      ) {
+        unique.push(r);
+      }
+    }
+    return sortRecordsByDateDesc(unique);
+  }, [records]);
 
   // Filter & Search computation
   const filteredRecords = useMemo(() => {
@@ -259,6 +278,18 @@ export default function SalesManager({
       return matchSearch && matchMonth && matchType;
     });
   }, [visibleRecords, searchTerm, filterMonth, filterType]);
+
+  const handleDeleteAll = async () => {
+    const totalRecords = records.filter(
+      r => (parseFloat(r.salesAmount) || 0) > 0 || (parseFloat(r.deliveryCharge) || 0) > 0
+    ).length;
+    if (!totalRecords) return;
+    const confirmed = window.confirm(
+      `Delete ALL ${totalRecords} sales ${totalRecords === 1 ? 'record' : 'records'} permanently? This cannot be undone.`
+    );
+    if (!confirmed) return;
+    await onDeleteAllRecords();
+  };
 
   return (
     <div className="space-y-6">
@@ -287,6 +318,14 @@ export default function SalesManager({
           >
             <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-400" />
             Filters
+          </button>
+
+          <button
+            onClick={handleDeleteAll}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border border-rose-500/30 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition-all cursor-pointer"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            Delete All
           </button>
 
           <button
@@ -466,6 +505,10 @@ export default function SalesManager({
                           </button>
                           <button
                             onClick={() => {
+                              if (!r?.id) {
+                                toast.error('Cannot delete: Record ID is missing');
+                                return;
+                              }
                               if (window.confirm('Delete this sales record from the database?')) {
                                 onDeleteRecord(r.id);
                               }

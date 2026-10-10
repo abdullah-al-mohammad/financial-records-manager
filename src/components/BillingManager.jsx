@@ -10,7 +10,7 @@ import {
   ToggleRight,
   Trash2,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import DatePicker from 'react-datepicker';
 import { format } from 'date-fns';
 import { toast } from 'react-toastify';
@@ -22,6 +22,7 @@ import {
   saveBillReminders,
   upsertBillReminder,
 } from '../utils/reminders';
+import { generateUniqueId } from '../utils/api';
 
 const MONTHS = [
   'January',
@@ -77,6 +78,10 @@ export default function BillingManager({
   const [paidAmount, setPaidAmount] = useState('');
   const [notes, setNotes] = useState('');
   const [editingPaymentId, setEditingPaymentId] = useState(null);
+
+  // Submission guard — prevents duplicate payout submissions on rapid clicks
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   // Selected merchant for ledger view
   const [focusedMerchant, setFocusedMerchant] = useState(null);
@@ -342,31 +347,42 @@ export default function BillingManager({
 
   const handlePaymentSubmit = async e => {
     e.preventDefault();
+    if (isSubmittingRef.current || isSubmitting) return; // Prevent duplicate submissions
     if (!selectedMerchant || !paidAmount) {
       toast.error('Merchant and payment amount are required');
       return;
     }
 
-    const payload = {
-      id: editingPaymentId || 'p' + Date.now(),
-      date: paymentDate,
-      merchantName: selectedMerchant,
-      paidAmount: String(paidAmount),
-      notes: notes.trim(),
-    };
+    isSubmittingRef.current = true;
+    setIsSubmitting(true);
+    try {
+      const payload = {
+        id: editingPaymentId || generateUniqueId('pay'),
+        date: paymentDate,
+        merchantName: selectedMerchant,
+        paidAmount: String(paidAmount),
+        notes: notes.trim(),
+      };
 
-    if (editingPaymentId) {
-      await onUpdatePayment(payload);
-    } else {
-      await onAddPayment(payload);
+      let success = false;
+      if (editingPaymentId) {
+        success = await onUpdatePayment(payload);
+      } else {
+        success = await onAddPayment(payload);
+      }
+
+      if (success !== false) {
+        setBillReminders(current => upsertBillReminder(current, selectedMerchant, payload.date));
+
+        // Reset Form
+        setPaidAmount('');
+        setNotes('');
+        setEditingPaymentId(null);
+      }
+    } finally {
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
     }
-
-    setBillReminders(current => upsertBillReminder(current, selectedMerchant, payload.date));
-
-    // Reset Form
-    setPaidAmount('');
-    setNotes('');
-    setEditingPaymentId(null);
   };
 
   const startEditPayment = p => {
@@ -680,9 +696,10 @@ export default function BillingManager({
             <div className="flex gap-2 pt-2">
               <button
                 type="submit"
-                className="flex-1 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white py-2 rounded-xl text-xs font-semibold shadow-lg shadow-indigo-600/10 transition-all cursor-pointer text-center"
+                disabled={isSubmitting}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed text-white py-2 rounded-xl text-xs font-semibold shadow-lg shadow-indigo-600/10 transition-all cursor-pointer text-center"
               >
-                {editingPaymentId ? 'Update Log' : 'Log Payout'}
+                {isSubmitting ? 'Processing...' : editingPaymentId ? 'Update Log' : 'Log Payout'}
               </button>
               {editingPaymentId && (
                 <button
@@ -979,6 +996,7 @@ export default function BillingManager({
                           </button>
                           <button
                             onClick={() => {
+                              if (!p?.id) return;
                               if (window.confirm('Delete this payout log permanently?')) {
                                 onDeletePayment(p.id);
                               }

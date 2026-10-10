@@ -17,8 +17,9 @@ import {
   Wallet,
   X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { formatDisplayDate, sortRecordsByDateDesc, toDateKey } from '../utils/dates';
+import { generateUniqueId } from '../utils/api';
 
 const ACCOUNT_LABELS = {
   cash: {
@@ -77,6 +78,7 @@ export default function ReceivableManager({
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   // ─── Payable State ─────────────────────────────────────────────────────────
   // payable সার্চ এবং ফিল্টারের জন্য আলাদা state রাখা হয়েছে
@@ -107,6 +109,7 @@ export default function ReceivableManager({
   });
 
   const [isPaySubmitting, setIsPaySubmitting] = useState(false);
+  const isPaySubmittingRef = useRef(false);
 
   // Metric Computations
   const stats = useMemo(() => {
@@ -306,6 +309,7 @@ export default function ReceivableManager({
   // Handle Save (Add or Update)
   const handleSaveRecord = async e => {
     e.preventDefault();
+    if (isSubmittingRef.current || isSubmitting) return;
     if (!form.name.trim()) {
       alert('Please enter a Person or Business Name.');
       return;
@@ -316,10 +320,12 @@ export default function ReceivableManager({
       return;
     }
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     try {
+      let success = false;
       if (editingRecord) {
-        await onUpdateReceivable({
+        success = await onUpdateReceivable({
           ...editingRecord,
           name: form.name.trim(),
           amount: String(amt),
@@ -330,7 +336,8 @@ export default function ReceivableManager({
           receivedDate: form.status === 'Received' ? editingRecord.receivedDate || form.date : null,
         });
       } else {
-        await onAddReceivable({
+        success = await onAddReceivable({
+          id: generateUniqueId('recv'),
           name: form.name.trim(),
           amount: String(amt),
           date: form.date,
@@ -340,10 +347,13 @@ export default function ReceivableManager({
           receivedDate: form.status === 'Received' ? form.date : null,
         });
       }
-      setShowAddEditModal(false);
+      if (success !== false) {
+        setShowAddEditModal(false);
+      }
     } catch (err) {
       console.error(err);
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -352,21 +362,26 @@ export default function ReceivableManager({
   const handleConfirmReceive = async e => {
     e.preventDefault();
     if (!receivingRecord) return;
+    if (isSubmittingRef.current || isSubmitting) return;
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     try {
-      await onUpdateReceivable({
+      const success = await onUpdateReceivable({
         ...receivingRecord,
         status: 'Received',
         receivedAccount: receiveForm.receivedAccount,
         receivedDate: receiveForm.receivedDate,
         note: receiveForm.receiptNote ? receiveForm.receiptNote.trim() : receivingRecord.note,
       });
-      setShowReceiveModal(false);
-      setReceivingRecord(null);
+      if (success !== false) {
+        setShowReceiveModal(false);
+        setReceivingRecord(null);
+      }
     } catch (err) {
       console.error(err);
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -392,6 +407,7 @@ export default function ReceivableManager({
 
   // Delete Record
   const handleDelete = async record => {
+    if (!record?.id) return;
     const confirm = window.confirm(
       `Are you sure you want to delete receivable record for "${record.name}" (৳${parseFloat(record.amount || 0).toLocaleString()})?`
     );
@@ -437,6 +453,7 @@ export default function ReceivableManager({
   // Payable Add/Edit form সংরক্ষণ করা
   const handleSavePayable = async e => {
     e.preventDefault();
+    if (isPaySubmittingRef.current || isPaySubmitting) return;
     if (!payForm.name.trim()) {
       alert('Please enter a Person or Business Name.');
       return;
@@ -447,11 +464,13 @@ export default function ReceivableManager({
       return;
     }
 
+    isPaySubmittingRef.current = true;
     setIsPaySubmitting(true);
     try {
+      let success = false;
       if (editingPayable) {
         // বিদ্যমান record আপডেট করা হচ্ছে
-        await onUpdatePayable({
+        success = await onUpdatePayable({
           ...editingPayable,
           name: payForm.name.trim(),
           amount: String(amt),
@@ -463,7 +482,8 @@ export default function ReceivableManager({
         });
       } else {
         // নতুন record তৈরি করা হচ্ছে
-        await onAddPayable({
+        success = await onAddPayable({
+          id: generateUniqueId('payab'),
           name: payForm.name.trim(),
           amount: String(amt),
           date: payForm.date,
@@ -473,10 +493,13 @@ export default function ReceivableManager({
           paidDate: payForm.status === 'Paid' ? payForm.date : null,
         });
       }
-      setShowPayAddEditModal(false);
+      if (success !== false) {
+        setShowPayAddEditModal(false);
+      }
     } catch (err) {
       console.error(err);
     } finally {
+      isPaySubmittingRef.current = false;
       setIsPaySubmitting(false);
     }
   };
@@ -507,11 +530,12 @@ export default function ReceivableManager({
       return;
     }
 
+    isPaySubmittingRef.current = true;
     setIsPaySubmitting(true);
     try {
       // API call: payable record আপডেট করা হচ্ছে, status 'Paid' এবং paidAccount সেট করা হচ্ছে
       // finance.js এর computeNetCashBalance function এই paidAccount দেখে correct cash bucket থেকে deduct করবে
-      await onUpdatePayable({
+      const success = await onUpdatePayable({
         ...payingRecord,               // existing সব field রাখা হচ্ছে
         status: 'Paid',                // status পরিবর্তন করা হচ্ছে Unpaid → Paid
         paidAccount: payModal.paidAccount,  // কোন account থেকে pay হয়েছে (cash/online/other_cash)
@@ -519,11 +543,14 @@ export default function ReceivableManager({
         note: payModal.payNote ? payModal.payNote.trim() : payingRecord.note, // আপডেটেড নোট
       });
       // সফল হলে modal বন্ধ করা হচ্ছে এবং state clear করা হচ্ছে
-      setShowPayModal(false);
-      setPayingRecord(null);
+      if (success !== false) {
+        setShowPayModal(false);
+        setPayingRecord(null);
+      }
     } catch (err) {
       console.error(err);
     } finally {
+      isPaySubmittingRef.current = false;
       setIsPaySubmitting(false);
     }
   };
@@ -549,6 +576,7 @@ export default function ReceivableManager({
 
   // Payable record ডিলিট করার handler
   const handleDeletePayable = async payable => {
+    if (!payable?.id) return;
     const confirmed = window.confirm(
       `"${payable.name}" (৳${parseFloat(payable.amount || 0).toLocaleString()})-এর payable record মুছে ফেলবেন?`
     );

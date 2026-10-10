@@ -129,9 +129,26 @@ function getOtherCashRecordsSheet() {
 // Helper: read all rows from a sheet into an array of objects in one call.
 // Avoids the per-action getDataRange().getValues() pattern that causes
 // repeated Google Sheets reads when multiple actions fire in parallel.
+// Also backfills a stable fallback ID for any rows that have a blank ID cell.
 function readAllRows(sheet, headers) {
   const data = sheet.getDataRange().getValues();
-  return data.length <= 1 ? [] : data.slice(1).map(row => rowToObject(row, headers));
+  if (data.length <= 1) return [];
+  const seenIds = new Set();
+  const rows = [];
+  for (let i = 1; i < data.length; i++) {
+    const obj = rowToObject(data[i], headers);
+    // If the row has no ID, generate a deterministic fallback so UI can reference it
+    if (!obj.id || String(obj.id).trim() === '') {
+      obj.id = headers[0] + '_row_' + (i + 1);
+    }
+    const idKey = String(obj.id).trim();
+    if (seenIds.has(idKey)) {
+      continue; // Skip duplicate rows with identical ID
+    }
+    seenIds.add(idKey);
+    rows.push(obj);
+  }
+  return rows;
 }
 
 // Single consolidated read for every dataset the Dashboard needs.
@@ -277,13 +294,81 @@ function logAudit(username, action, details) {
   sheet.appendRow(row);
 }
 
-// Find row index by ID
+// Find row index by ID — dynamically determines ID column and prevents blank-row matching
 function findRowById(sheet, id, headers) {
+  const idStr = String(id || '').trim();
+  if (!idStr) return -1; // Never match on empty ID
   const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return -1;
+
+  let idCol = 0;
+  if (data[0] && Array.isArray(data[0])) {
+    const sheetColIdx = data[0].findIndex(h => String(h || '').trim().toLowerCase() === 'id');
+    if (sheetColIdx !== -1) idCol = sheetColIdx;
+  } else if (headers && Array.isArray(headers)) {
+    const headerIdx = headers.indexOf('id');
+    if (headerIdx !== -1) idCol = headerIdx;
+  }
+
   for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === String(id)) return i + 1;
+    if (String(data[i][idCol] || '').trim() === idStr) return i + 1;
   }
   return -1;
+}
+
+// Safe cleanup utility for existing duplicate rows in sheets
+function cleanupDuplicateSalesRecords() {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(15000);
+    const sheet = getSheet();
+    const data = sheet.getDataRange().getValues();
+    if (data.length <= 2) return { success: true, removedCount: 0 };
+
+    let idCol = 0;
+    if (data[0] && Array.isArray(data[0])) {
+      const idx = data[0].findIndex(h => String(h || '').trim().toLowerCase() === 'id');
+      if (idx !== -1) idCol = idx;
+    }
+
+    const seenIds = new Set();
+    const rowsToDelete = [];
+
+    // Scan top to bottom; keep the first valid occurrence of each ID, mark later duplicates
+    for (let i = 1; i < data.length; i++) {
+      const rowId = String(data[i][idCol] || '').trim();
+      if (!rowId) continue; // Don't delete legacy un-identified rows automatically
+      if (seenIds.has(rowId)) {
+        rowsToDelete.push(i + 1); // 1-indexed sheet row
+      } else {
+        seenIds.add(rowId);
+      }
+    }
+
+    // Delete marked duplicate rows from bottom to top to preserve row indices
+    for (let j = rowsToDelete.length - 1; j >= 0; j--) {
+      sheet.deleteRow(rowsToDelete[j]);
+    }
+
+    SpreadsheetApp.flush();
+    logAudit('SYSTEM', 'Cleanup Duplicate Sales Records', `Removed ${rowsToDelete.length} duplicate rows. Kept 1 valid row per ID.`);
+
+    return { success: true, removedCount: rowsToDelete.length };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Add custom menu to Google Sheets for one-click safe duplicate cleanup
+function onOpen() {
+  try {
+    SpreadsheetApp.getUi()
+      .createMenu('Financial Manager')
+      .addItem('Clean Up Duplicate Records', 'cleanupDuplicateSalesRecords')
+      .addToUi();
+  } catch (e) {
+    // Suppress if running in headless context
+  }
 }
 
 // Find row index by a specific column value (e.g. monthKey)
@@ -293,6 +378,20 @@ function findRowByKey(sheet, headers, column, value) {
   const data = sheet.getDataRange().getValues();
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][colIdx]) === String(value)) return i + 1;
+  }
+  return -1;
+}
+
+// Tolerant month lookup: matches "2026-09" against stored "2026-09",
+// "2026-09-01" or "2026-09-01T00:00:00Z" (Google Sheets date values)
+function findRowByMonthPrefix(sheet, headers, column, value) {
+  const colIdx = headers.indexOf(column);
+  if (colIdx === -1) return -1;
+  const prefix = String(value).slice(0, 7);
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    const stored = String(data[i][colIdx]);
+    if (stored === String(value) || stored.slice(0, 7) === prefix) return i + 1;
   }
   return -1;
 }
@@ -360,6 +459,39 @@ function setOpeningBalanceEntry(entry, user) {
     `Month: ${entryObj.monthKey} — Total: ৳${entryObj.totalCash} (Hand: ৳${handCash}, Online: ৳${onlineCash}, Other: ৳${otherCash}) Source: ${sourceLabel}`
   );
   return { success: true, id: entryObj.id };
+}
+
+function deleteOpeningBalanceEntry(params, user) {
+  const id = params && params.id ? String(params.id) : null;
+  const monthKey = params && params.monthKey ? String(params.monthKey) : null;
+  if (!id && !monthKey) throw new Error('Opening balance requires a month key.');
+
+  const currentMonth = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM');
+  if (monthKey && String(monthKey).slice(0, 7) < currentMonth) {
+    throw new Error('Opening balance for past months cannot be removed.');
+  }
+
+  const sheet = getOpeningBalancesSheet();
+  let rowIndex = -1;
+  if (id) {
+    rowIndex = findRowById(sheet, id, OPENING_BALANCE_HEADERS);
+  }
+  if (rowIndex === -1 && monthKey) {
+    rowIndex = findRowByMonthPrefix(sheet, OPENING_BALANCE_HEADERS, 'monthKey', monthKey);
+  }
+  if (rowIndex === -1) throw new Error('Opening balance not found.');
+
+  // Fetch details before delete for audit logs
+  const detailsRow = sheet.getRange(rowIndex, 1, 1, OPENING_BALANCE_HEADERS.length).getValues()[0];
+  const detailsObj = rowToObject(detailsRow, OPENING_BALANCE_HEADERS);
+
+  sheet.deleteRow(rowIndex);
+  logAudit(
+    user,
+    'Delete Opening Balance',
+    `Month: ${detailsObj.monthKey} — Total: ৳${detailsObj.totalCash} (Hand: ৳${detailsObj.handCash}, Online: ৳${detailsObj.onlineCash}, Other: ৳${detailsObj.otherCash})`
+  );
+  return { success: true };
 }
 
 function getMonthClosingsList() {
@@ -469,24 +601,34 @@ function doGet(e) {
     // Sales Records Actions
     if (action === 'getAll') {
       const sheet = getSheet();
-      const data = sheet.getDataRange().getValues();
-      const records =
-        data.length <= 1 ? [] : data.slice(1).map(row => rowToObject(row, RECORD_HEADERS));
+      const records = readAllRows(sheet, RECORD_HEADERS);
       return jsonResponse({ success: true, records }, callback);
     }
 
     if (action === 'create') {
-      const sheet = getSheet();
-      if (!record.id) record.id = new Date().getTime().toString();
-      if (!record.createdAt) record.createdAt = new Date().toISOString();
-      console.log(JSON.stringify(record));
-      sheet.appendRow(objectToRow(record, RECORD_HEADERS));
-      logAudit(
-        user,
-        'Create Sales Record',
-        `ID: ${record.id}, Merchant: ${record.merchantName}, Amount: ৳${record.salesAmount}`
-      );
-      return jsonResponse({ success: true, id: record.id }, callback);
+      const lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(10000);
+        const sheet = getSheet();
+        if (!record.id) record.id = new Date().getTime().toString();
+        if (!record.createdAt) record.createdAt = new Date().toISOString();
+        // Idempotency: if a row with this ID already exists, return success without appending
+        const existingRow = findRowById(sheet, record.id, RECORD_HEADERS);
+        if (existingRow !== -1) {
+          return jsonResponse({ success: true, id: record.id, duplicatePrevented: true }, callback);
+        }
+        console.log(JSON.stringify(record));
+        sheet.appendRow(objectToRow(record, RECORD_HEADERS));
+        SpreadsheetApp.flush();
+        logAudit(
+          user,
+          'Create Sales Record',
+          `ID: ${record.id}, Merchant: ${record.merchantName}, Amount: ৳${record.salesAmount}`
+        );
+        return jsonResponse({ success: true, id: record.id }, callback);
+      } finally {
+        lock.releaseLock();
+      }
     }
 
     if (action === 'update') {
@@ -505,20 +647,33 @@ function doGet(e) {
     }
 
     if (action === 'delete') {
+      const lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(10000);
+        const sheet = getSheet();
+        const row = findRowById(sheet, id, RECORD_HEADERS);
+        if (row === -1) return jsonResponse({ success: false, error: 'Record not found' }, callback);
+        const detailsRow = sheet.getRange(row, 1, 1, RECORD_HEADERS.length).getValues()[0];
+        const detailsObj = rowToObject(detailsRow, RECORD_HEADERS);
+        sheet.deleteRow(row);
+        logAudit(
+          user,
+          'Delete Sales Record',
+          `ID: ${id}, Merchant: ${detailsObj.merchantName}, Amount: ৳${detailsObj.salesAmount}`
+        );
+        return jsonResponse({ success: true }, callback);
+      } finally {
+        lock.releaseLock();
+      }
+    }
+
+    if (action === 'deleteAllRecords') {
       const sheet = getSheet();
-      const row = findRowById(sheet, id, RECORD_HEADERS);
-      if (row === -1) return jsonResponse({ success: false, error: 'Record not found' }, callback);
-
-      // Fetch details before delete for audit logs
-      const detailsRow = sheet.getRange(row, 1, 1, RECORD_HEADERS.length).getValues()[0];
-      const detailsObj = rowToObject(detailsRow, RECORD_HEADERS);
-
-      sheet.deleteRow(row);
-      logAudit(
-        user,
-        'Delete Sales Record',
-        `ID: ${id}, Merchant: ${detailsObj.merchantName}, Amount: ৳${detailsObj.salesAmount}`
-      );
+      const rowCount = sheet.getLastRow();
+      if (rowCount > 1) {
+        sheet.deleteRows(2, rowCount - 1);
+      }
+      logAudit(user, 'Delete All Sales Records', 'All sales records cleared');
       return jsonResponse({ success: true }, callback);
     }
 
@@ -532,15 +687,25 @@ function doGet(e) {
     }
 
     if (action === 'createPayment') {
-      const sheet = getPaymentsSheet();
-      if (!payment.id) payment.id = 'p' + new Date().getTime().toString();
-      sheet.appendRow(objectToRow(payment, PAYMENT_HEADERS));
-      logAudit(
-        user,
-        'Record Payment',
-        `ID: ${payment.id}, Merchant: ${payment.merchantName}, Paid: ৳${payment.paidAmount}`
-      );
-      return jsonResponse({ success: true, id: payment.id }, callback);
+      const lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(10000);
+        const sheet = getPaymentsSheet();
+        if (!payment.id) payment.id = 'p' + new Date().getTime().toString();
+        // Idempotency check
+        if (findRowById(sheet, payment.id, PAYMENT_HEADERS) !== -1) {
+          return jsonResponse({ success: true, id: payment.id, duplicatePrevented: true }, callback);
+        }
+        sheet.appendRow(objectToRow(payment, PAYMENT_HEADERS));
+        logAudit(
+          user,
+          'Record Payment',
+          `ID: ${payment.id}, Merchant: ${payment.merchantName}, Paid: ৳${payment.paidAmount}`
+        );
+        return jsonResponse({ success: true, id: payment.id }, callback);
+      } finally {
+        lock.releaseLock();
+      }
     }
 
     if (action === 'updatePayment') {
@@ -559,20 +724,24 @@ function doGet(e) {
     }
 
     if (action === 'deletePayment') {
-      const sheet = getPaymentsSheet();
-      const row = findRowById(sheet, id, PAYMENT_HEADERS);
-      if (row === -1) return jsonResponse({ success: false, error: 'Payment not found' }, callback);
-
-      const detailsRow = sheet.getRange(row, 1, 1, PAYMENT_HEADERS.length).getValues()[0];
-      const detailsObj = rowToObject(detailsRow, PAYMENT_HEADERS);
-
-      sheet.deleteRow(row);
-      logAudit(
-        user,
-        'Delete Payment',
-        `ID: ${id}, Merchant: ${detailsObj.merchantName}, Paid: ৳${detailsObj.paidAmount}`
-      );
-      return jsonResponse({ success: true }, callback);
+      const lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(10000);
+        const sheet = getPaymentsSheet();
+        const row = findRowById(sheet, id, PAYMENT_HEADERS);
+        if (row === -1) return jsonResponse({ success: false, error: 'Payment not found' }, callback);
+        const detailsRow = sheet.getRange(row, 1, 1, PAYMENT_HEADERS.length).getValues()[0];
+        const detailsObj = rowToObject(detailsRow, PAYMENT_HEADERS);
+        sheet.deleteRow(row);
+        logAudit(
+          user,
+          'Delete Payment',
+          `ID: ${id}, Merchant: ${detailsObj.merchantName}, Paid: ৳${detailsObj.paidAmount}`
+        );
+        return jsonResponse({ success: true }, callback);
+      } finally {
+        lock.releaseLock();
+      }
     }
 
     // Transfer Actions
@@ -585,32 +754,46 @@ function doGet(e) {
     }
 
     if (action === 'createTransfer') {
-      const sheet = getTransfersSheet();
-      if (!transfer.id) transfer.id = 't' + new Date().getTime().toString();
-      sheet.appendRow(objectToRow(transfer, TRANSFER_HEADERS));
-      logAudit(
-        user,
-        'bKash Transfer',
-        `ID: ${transfer.id}, Amount: ৳${transfer.amount}, Note: ${transfer.note || '—'}`
-      );
-      return jsonResponse({ success: true, id: transfer.id }, callback);
+      const lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(10000);
+        const sheet = getTransfersSheet();
+        if (!transfer.id) transfer.id = 't' + new Date().getTime().toString();
+        // Idempotency check
+        if (findRowById(sheet, transfer.id, TRANSFER_HEADERS) !== -1) {
+          return jsonResponse({ success: true, id: transfer.id, duplicatePrevented: true }, callback);
+        }
+        sheet.appendRow(objectToRow(transfer, TRANSFER_HEADERS));
+        logAudit(
+          user,
+          'bKash Transfer',
+          `ID: ${transfer.id}, Amount: ৳${transfer.amount}, Note: ${transfer.note || '—'}`
+        );
+        return jsonResponse({ success: true, id: transfer.id }, callback);
+      } finally {
+        lock.releaseLock();
+      }
     }
 
     if (action === 'deleteTransfer') {
-      const sheet = getTransfersSheet();
-      const row = findRowById(sheet, id, TRANSFER_HEADERS);
-      if (row === -1) return jsonResponse({ success: false, error: 'Transfer not found' }, callback);
-
-      const detailsRow = sheet.getRange(row, 1, 1, TRANSFER_HEADERS.length).getValues()[0];
-      const detailsObj = rowToObject(detailsRow, TRANSFER_HEADERS);
-
-      sheet.deleteRow(row);
-      logAudit(
-        user,
-        'Delete bKash Transfer',
-        `ID: ${id}, Amount: ৳${detailsObj.amount}`
-      );
-      return jsonResponse({ success: true }, callback);
+      const lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(10000);
+        const sheet = getTransfersSheet();
+        const row = findRowById(sheet, id, TRANSFER_HEADERS);
+        if (row === -1) return jsonResponse({ success: false, error: 'Transfer not found' }, callback);
+        const detailsRow = sheet.getRange(row, 1, 1, TRANSFER_HEADERS.length).getValues()[0];
+        const detailsObj = rowToObject(detailsRow, TRANSFER_HEADERS);
+        sheet.deleteRow(row);
+        logAudit(
+          user,
+          'Delete bKash Transfer',
+          `ID: ${id}, Amount: ৳${detailsObj.amount}`
+        );
+        return jsonResponse({ success: true }, callback);
+      } finally {
+        lock.releaseLock();
+      }
     }
 
     // Receivable Actions (Money I Will Receive)
@@ -622,6 +805,54 @@ function doGet(e) {
       return jsonResponse({ success: true, receivables }, callback);
     }
 
+    if (action === 'createReceivable') {
+      const lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(10000);
+        const sheet = getReceivablesSheet();
+        const receivable = parseJsonParam(e.parameter.receivable);
+        if (!receivable) return jsonResponse({ success: false, error: 'Missing receivable data' }, callback);
+        if (!receivable.id) receivable.id = 'recv_' + new Date().getTime().toString();
+        if (!receivable.status) receivable.status = 'Not Received';
+        if (findRowById(sheet, receivable.id, RECEIVABLE_HEADERS) !== -1) {
+          return jsonResponse({ success: true, id: receivable.id, duplicatePrevented: true }, callback);
+        }
+        sheet.appendRow(objectToRow(receivable, RECEIVABLE_HEADERS));
+        logAudit(user, 'Create Receivable', `ID: ${receivable.id}, Name: ${receivable.name}, Amount: ৳${receivable.amount}`);
+        return jsonResponse({ success: true, id: receivable.id }, callback);
+      } finally {
+        lock.releaseLock();
+      }
+    }
+
+    if (action === 'updateReceivable') {
+      const sheet = getReceivablesSheet();
+      const receivable = parseJsonParam(e.parameter.receivable);
+      if (!receivable) return jsonResponse({ success: false, error: 'Missing receivable data' }, callback);
+      const row = findRowById(sheet, receivable.id, RECEIVABLE_HEADERS);
+      if (row === -1) return jsonResponse({ success: false, error: 'Receivable not found' }, callback);
+      sheet.getRange(row, 1, 1, RECEIVABLE_HEADERS.length).setValues([objectToRow(receivable, RECEIVABLE_HEADERS)]);
+      logAudit(user, 'Update Receivable', `ID: ${receivable.id}, Name: ${receivable.name}, Status: ${receivable.status}`);
+      return jsonResponse({ success: true }, callback);
+    }
+
+    if (action === 'deleteReceivable') {
+      const lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(10000);
+        const sheet = getReceivablesSheet();
+        const row = findRowById(sheet, id, RECEIVABLE_HEADERS);
+        if (row === -1) return jsonResponse({ success: false, error: 'Receivable not found' }, callback);
+        const detailsRow = sheet.getRange(row, 1, 1, RECEIVABLE_HEADERS.length).getValues()[0];
+        const detailsObj = rowToObject(detailsRow, RECEIVABLE_HEADERS);
+        sheet.deleteRow(row);
+        logAudit(user, 'Delete Receivable', `ID: ${id}, Name: ${detailsObj.name}, Amount: ৳${detailsObj.amount}`);
+        return jsonResponse({ success: true }, callback);
+      } finally {
+        lock.releaseLock();
+      }
+    }
+
     // Payable Actions (Money I Owe)
     if (action === 'getPayables') {
       const sheet = getPayablesSheet();
@@ -629,6 +860,111 @@ function doGet(e) {
       const payables =
         data.length <= 1 ? [] : data.slice(1).map(row => rowToObject(row, PAYABLE_HEADERS));
       return jsonResponse({ success: true, payables }, callback);
+    }
+
+    if (action === 'createPayable') {
+      const lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(10000);
+        const sheet = getPayablesSheet();
+        const payable = parseJsonParam(e.parameter.payable);
+        if (!payable) return jsonResponse({ success: false, error: 'Missing payable data' }, callback);
+        if (!payable.id) payable.id = 'pay_' + new Date().getTime().toString();
+        if (!payable.status) payable.status = 'Unpaid';
+        if (findRowById(sheet, payable.id, PAYABLE_HEADERS) !== -1) {
+          return jsonResponse({ success: true, id: payable.id, duplicatePrevented: true }, callback);
+        }
+        sheet.appendRow(objectToRow(payable, PAYABLE_HEADERS));
+        logAudit(user, 'Create Payable', `ID: ${payable.id}, Name: ${payable.name}, Amount: ৳${payable.amount}`);
+        return jsonResponse({ success: true, id: payable.id }, callback);
+      } finally {
+        lock.releaseLock();
+      }
+    }
+
+    if (action === 'updatePayable') {
+      const sheet = getPayablesSheet();
+      const payable = parseJsonParam(e.parameter.payable);
+      if (!payable) return jsonResponse({ success: false, error: 'Missing payable data' }, callback);
+      const row = findRowById(sheet, payable.id, PAYABLE_HEADERS);
+      if (row === -1) return jsonResponse({ success: false, error: 'Payable not found' }, callback);
+      sheet.getRange(row, 1, 1, PAYABLE_HEADERS.length).setValues([objectToRow(payable, PAYABLE_HEADERS)]);
+      logAudit(user, 'Update Payable', `ID: ${payable.id}, Name: ${payable.name}, Status: ${payable.status}`);
+      return jsonResponse({ success: true }, callback);
+    }
+
+    if (action === 'deletePayable') {
+      const lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(10000);
+        const sheet = getPayablesSheet();
+        const row = findRowById(sheet, id, PAYABLE_HEADERS);
+        if (row === -1) return jsonResponse({ success: false, error: 'Payable not found' }, callback);
+        const detailsRow = sheet.getRange(row, 1, 1, PAYABLE_HEADERS.length).getValues()[0];
+        const detailsObj = rowToObject(detailsRow, PAYABLE_HEADERS);
+        sheet.deleteRow(row);
+        logAudit(user, 'Delete Payable', `ID: ${id}, Name: ${detailsObj.name}, Amount: ৳${detailsObj.amount}`);
+        return jsonResponse({ success: true }, callback);
+      } finally {
+        lock.releaseLock();
+      }
+    }
+
+    // Other Cash Records Actions
+    if (action === 'getOtherCashRecords') {
+      const sheet = getOtherCashRecordsSheet();
+      const data = sheet.getDataRange().getValues();
+      const otherCashRecords =
+        data.length <= 1 ? [] : data.slice(1).map(row => rowToObject(row, OTHER_CASH_HEADERS));
+      return jsonResponse({ success: true, otherCashRecords }, callback);
+    }
+
+    if (action === 'createOtherCashRecord') {
+      const lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(10000);
+        const sheet = getOtherCashRecordsSheet();
+        const ocRecord = parseJsonParam(e.parameter.record);
+        if (!ocRecord) return jsonResponse({ success: false, error: 'Missing record data' }, callback);
+        if (!ocRecord.id) ocRecord.id = 'oc_' + new Date().getTime().toString();
+        if (!ocRecord.createdAt) ocRecord.createdAt = new Date().toISOString();
+        if (findRowById(sheet, ocRecord.id, OTHER_CASH_HEADERS) !== -1) {
+          return jsonResponse({ success: true, id: ocRecord.id, duplicatePrevented: true }, callback);
+        }
+        sheet.appendRow(objectToRow(ocRecord, OTHER_CASH_HEADERS));
+        logAudit(user, 'Create Other Cash Record', `ID: ${ocRecord.id}, Type: ${ocRecord.type}, Source: ${ocRecord.source}, Amount: ৳${ocRecord.amount}`);
+        return jsonResponse({ success: true, id: ocRecord.id }, callback);
+      } finally {
+        lock.releaseLock();
+      }
+    }
+
+    if (action === 'updateOtherCashRecord') {
+      const sheet = getOtherCashRecordsSheet();
+      const ocRecord = parseJsonParam(e.parameter.record);
+      if (!ocRecord) return jsonResponse({ success: false, error: 'Missing record data' }, callback);
+      const row = findRowById(sheet, ocRecord.id, OTHER_CASH_HEADERS);
+      if (row === -1) return jsonResponse({ success: false, error: 'Other cash record not found' }, callback);
+      sheet.getRange(row, 1, 1, OTHER_CASH_HEADERS.length).setValues([objectToRow(ocRecord, OTHER_CASH_HEADERS)]);
+      logAudit(user, 'Update Other Cash Record', `ID: ${ocRecord.id}, Type: ${ocRecord.type}, Source: ${ocRecord.source}, Amount: ৳${ocRecord.amount}`);
+      return jsonResponse({ success: true }, callback);
+    }
+
+    if (action === 'deleteOtherCashRecord') {
+      const lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(10000);
+        const sheet = getOtherCashRecordsSheet();
+        const row = findRowById(sheet, id, OTHER_CASH_HEADERS);
+        if (row === -1) return jsonResponse({ success: false, error: 'Other cash record not found' }, callback);
+        const detailsRow = sheet.getRange(row, 1, 1, OTHER_CASH_HEADERS.length).getValues()[0];
+        const detailsObj = rowToObject(detailsRow, OTHER_CASH_HEADERS);
+        sheet.deleteRow(row);
+        logAudit(user, 'Delete Other Cash Record', `ID: ${id}, Type: ${detailsObj.type}, Source: ${detailsObj.source}, Amount: ৳${detailsObj.amount}`);
+        return jsonResponse({ success: true }, callback);
+      } finally {
+        lock.releaseLock();
+      }
     }
 
     // Opening Balance Actions (One record per calendar month)
@@ -640,9 +976,25 @@ function doGet(e) {
       return jsonResponse(setOpeningBalanceEntry(entry, user), callback);
     }
 
+    if (action === 'deleteOpeningBalance') {
+      return jsonResponse(deleteOpeningBalanceEntry(
+        { id: e.parameter.id || (entry ? entry.id : null), monthKey: e.parameter.monthKey || (entry ? entry.monthKey : id) }, user
+      ), callback);
+    }
+
     // Month Closing Actions
     if (action === 'getMonthClosings') {
       return jsonResponse({ success: true, monthClosings: getMonthClosingsList() }, callback);
+    }
+
+    if (action === 'createMonthClosing') {
+      const lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(10000);
+        return jsonResponse(createMonthClosingEntry(entry, user), callback);
+      } finally {
+        lock.releaseLock();
+      }
     }
 
     // Other Cash Records Actions
@@ -783,6 +1135,13 @@ function doGet(e) {
       return jsonResponse({ success: true, logs: logs.reverse() }, callback); // Return newest logs first
     }
 
+    if (action === 'cleanupDuplicates') {
+      if (!isAdmin)
+        return jsonResponse({ success: false, error: 'Access Denied: Admins only' }, callback);
+      const res = cleanupDuplicateSalesRecords();
+      return jsonResponse(res, callback);
+    }
+
     return jsonResponse({ success: false, error: 'Unknown action: ' + action }, callback);
   } catch (err) {
     return jsonResponse({ success: false, error: err.toString() }, callback);
@@ -851,23 +1210,32 @@ function doPost(e) {
     // Sales Records Actions
     if (action === 'getAll') {
       const sheet = getSheet();
-      const data = sheet.getDataRange().getValues();
-      const records =
-        data.length <= 1 ? [] : data.slice(1).map(row => rowToObject(row, RECORD_HEADERS));
+      const records = readAllRows(sheet, RECORD_HEADERS);
       return jsonResponse({ success: true, records });
     }
 
     if (action === 'create') {
-      const sheet = getSheet();
-      if (!record.id) record.id = new Date().getTime().toString();
-      if (!record.createdAt) record.createdAt = new Date().toISOString();
-      sheet.appendRow(objectToRow(record, RECORD_HEADERS));
-      logAudit(
-        user,
-        'Create Sales Record',
-        `ID: ${record.id}, Merchant: ${record.merchantName}, Amount: ৳${record.salesAmount}`
-      );
-      return jsonResponse({ success: true, id: record.id });
+      const lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(10000);
+        const sheet = getSheet();
+        if (!record.id) record.id = new Date().getTime().toString();
+        if (!record.createdAt) record.createdAt = new Date().toISOString();
+        // Idempotency: if a row with this ID already exists, return success without appending
+        if (findRowById(sheet, record.id, RECORD_HEADERS) !== -1) {
+          return jsonResponse({ success: true, id: record.id, duplicatePrevented: true });
+        }
+        sheet.appendRow(objectToRow(record, RECORD_HEADERS));
+        SpreadsheetApp.flush();
+        logAudit(
+          user,
+          'Create Sales Record',
+          `ID: ${record.id}, Merchant: ${record.merchantName}, Amount: ৳${record.salesAmount}`
+        );
+        return jsonResponse({ success: true, id: record.id });
+      } finally {
+        lock.releaseLock();
+      }
     }
 
     if (action === 'update') {
@@ -886,17 +1254,33 @@ function doPost(e) {
     }
 
     if (action === 'delete') {
+      const lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(10000);
+        const sheet = getSheet();
+        const row = findRowById(sheet, id, RECORD_HEADERS);
+        if (row === -1) return jsonResponse({ success: false, error: 'Record not found' });
+        const detailsRow = sheet.getRange(row, 1, 1, RECORD_HEADERS.length).getValues()[0];
+        const detailsObj = rowToObject(detailsRow, RECORD_HEADERS);
+        sheet.deleteRow(row);
+        logAudit(
+          user,
+          'Delete Sales Record',
+          `ID: ${id}, Merchant: ${detailsObj.merchantName}, Amount: ৳${detailsObj.salesAmount}`
+        );
+        return jsonResponse({ success: true });
+      } finally {
+        lock.releaseLock();
+      }
+    }
+
+    if (action === 'deleteAllRecords') {
       const sheet = getSheet();
-      const row = findRowById(sheet, id, RECORD_HEADERS);
-      if (row === -1) return jsonResponse({ success: false, error: 'Record not found' });
-      const detailsRow = sheet.getRange(row, 1, 1, RECORD_HEADERS.length).getValues()[0];
-      const detailsObj = rowToObject(detailsRow, RECORD_HEADERS);
-      sheet.deleteRow(row);
-      logAudit(
-        user,
-        'Delete Sales Record',
-        `ID: ${id}, Merchant: ${detailsObj.merchantName}, Amount: ৳${detailsObj.salesAmount}`
-      );
+      const rowCount = sheet.getLastRow();
+      if (rowCount > 1) {
+        sheet.deleteRows(2, rowCount - 1);
+      }
+      logAudit(user, 'Delete All Sales Records', 'All sales records cleared');
       return jsonResponse({ success: true });
     }
 
@@ -910,15 +1294,25 @@ function doPost(e) {
     }
 
     if (action === 'createPayment') {
-      const sheet = getPaymentsSheet();
-      if (!payment.id) payment.id = 'p' + new Date().getTime().toString();
-      sheet.appendRow(objectToRow(payment, PAYMENT_HEADERS));
-      logAudit(
-        user,
-        'Record Payment',
-        `ID: ${payment.id}, Merchant: ${payment.merchantName}, Paid: ৳${payment.paidAmount}`
-      );
-      return jsonResponse({ success: true, id: payment.id });
+      const lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(10000);
+        const sheet = getPaymentsSheet();
+        if (!payment.id) payment.id = 'p' + new Date().getTime().toString();
+        // Idempotency check
+        if (findRowById(sheet, payment.id, PAYMENT_HEADERS) !== -1) {
+          return jsonResponse({ success: true, id: payment.id, duplicatePrevented: true });
+        }
+        sheet.appendRow(objectToRow(payment, PAYMENT_HEADERS));
+        logAudit(
+          user,
+          'Record Payment',
+          `ID: ${payment.id}, Merchant: ${payment.merchantName}, Paid: ৳${payment.paidAmount}`
+        );
+        return jsonResponse({ success: true, id: payment.id });
+      } finally {
+        lock.releaseLock();
+      }
     }
 
     if (action === 'updatePayment') {
@@ -937,18 +1331,24 @@ function doPost(e) {
     }
 
     if (action === 'deletePayment') {
-      const sheet = getPaymentsSheet();
-      const row = findRowById(sheet, id, PAYMENT_HEADERS);
-      if (row === -1) return jsonResponse({ success: false, error: 'Payment not found' });
-      const detailsRow = sheet.getRange(row, 1, 1, PAYMENT_HEADERS.length).getValues()[0];
-      const detailsObj = rowToObject(detailsRow, PAYMENT_HEADERS);
-      sheet.deleteRow(row);
-      logAudit(
-        user,
-        'Delete Payment',
-        `ID: ${id}, Merchant: ${detailsObj.merchantName}, Paid: ৳${detailsObj.paidAmount}`
-      );
-      return jsonResponse({ success: true });
+      const lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(10000);
+        const sheet = getPaymentsSheet();
+        const row = findRowById(sheet, id, PAYMENT_HEADERS);
+        if (row === -1) return jsonResponse({ success: false, error: 'Payment not found' });
+        const detailsRow = sheet.getRange(row, 1, 1, PAYMENT_HEADERS.length).getValues()[0];
+        const detailsObj = rowToObject(detailsRow, PAYMENT_HEADERS);
+        sheet.deleteRow(row);
+        logAudit(
+          user,
+          'Delete Payment',
+          `ID: ${id}, Merchant: ${detailsObj.merchantName}, Paid: ৳${detailsObj.paidAmount}`
+        );
+        return jsonResponse({ success: true });
+      } finally {
+        lock.releaseLock();
+      }
     }
 
     // Transfer Actions
@@ -961,30 +1361,46 @@ function doPost(e) {
     }
 
     if (action === 'createTransfer') {
-      const sheet = getTransfersSheet();
-      if (!transfer.id) transfer.id = 't' + new Date().getTime().toString();
-      sheet.appendRow(objectToRow(transfer, TRANSFER_HEADERS));
-      logAudit(
-        user,
-        'bKash Transfer',
-        `ID: ${transfer.id}, Amount: ৳${transfer.amount}, Note: ${transfer.note || '—'}`
-      );
-      return jsonResponse({ success: true, id: transfer.id });
+      const lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(10000);
+        const sheet = getTransfersSheet();
+        if (!transfer.id) transfer.id = 't' + new Date().getTime().toString();
+        // Idempotency check
+        if (findRowById(sheet, transfer.id, TRANSFER_HEADERS) !== -1) {
+          return jsonResponse({ success: true, id: transfer.id, duplicatePrevented: true });
+        }
+        sheet.appendRow(objectToRow(transfer, TRANSFER_HEADERS));
+        logAudit(
+          user,
+          'bKash Transfer',
+          `ID: ${transfer.id}, Amount: ৳${transfer.amount}, Note: ${transfer.note || '—'}`
+        );
+        return jsonResponse({ success: true, id: transfer.id });
+      } finally {
+        lock.releaseLock();
+      }
     }
 
     if (action === 'deleteTransfer') {
-      const sheet = getTransfersSheet();
-      const row = findRowById(sheet, id, TRANSFER_HEADERS);
-      if (row === -1) return jsonResponse({ success: false, error: 'Transfer not found' });
-      const detailsRow = sheet.getRange(row, 1, 1, TRANSFER_HEADERS.length).getValues()[0];
-      const detailsObj = rowToObject(detailsRow, TRANSFER_HEADERS);
-      sheet.deleteRow(row);
-      logAudit(
-        user,
-        'Delete bKash Transfer',
-        `ID: ${id}, Amount: ৳${detailsObj.amount}`
-      );
-      return jsonResponse({ success: true });
+      const lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(10000);
+        const sheet = getTransfersSheet();
+        const row = findRowById(sheet, id, TRANSFER_HEADERS);
+        if (row === -1) return jsonResponse({ success: false, error: 'Transfer not found' });
+        const detailsRow = sheet.getRange(row, 1, 1, TRANSFER_HEADERS.length).getValues()[0];
+        const detailsObj = rowToObject(detailsRow, TRANSFER_HEADERS);
+        sheet.deleteRow(row);
+        logAudit(
+          user,
+          'Delete bKash Transfer',
+          `ID: ${id}, Amount: ৳${detailsObj.amount}`
+        );
+        return jsonResponse({ success: true });
+      } finally {
+        lock.releaseLock();
+      }
     }
 
     // Receivable Actions (Money I Will Receive)
@@ -997,16 +1413,26 @@ function doPost(e) {
     }
 
     if (action === 'createReceivable') {
-      const sheet = getReceivablesSheet();
-      if (!receivable.id) receivable.id = 'rec_' + new Date().getTime().toString();
-      if (!receivable.status) receivable.status = 'Not Received';
-      sheet.appendRow(objectToRow(receivable, RECEIVABLE_HEADERS));
-      logAudit(
-        user,
-        'Create Receivable',
-        `ID: ${receivable.id}, Name: ${receivable.name}, Amount: ৳${receivable.amount}`
-      );
-      return jsonResponse({ success: true, id: receivable.id });
+      const lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(10000);
+        const sheet = getReceivablesSheet();
+        if (!receivable.id) receivable.id = 'recv_' + new Date().getTime().toString();
+        if (!receivable.status) receivable.status = 'Not Received';
+        // Idempotency check
+        if (findRowById(sheet, receivable.id, RECEIVABLE_HEADERS) !== -1) {
+          return jsonResponse({ success: true, id: receivable.id, duplicatePrevented: true });
+        }
+        sheet.appendRow(objectToRow(receivable, RECEIVABLE_HEADERS));
+        logAudit(
+          user,
+          'Create Receivable',
+          `ID: ${receivable.id}, Name: ${receivable.name}, Amount: ৳${receivable.amount}`
+        );
+        return jsonResponse({ success: true, id: receivable.id });
+      } finally {
+        lock.releaseLock();
+      }
     }
 
     if (action === 'updateReceivable') {
@@ -1025,18 +1451,24 @@ function doPost(e) {
     }
 
     if (action === 'deleteReceivable') {
-      const sheet = getReceivablesSheet();
-      const row = findRowById(sheet, id, RECEIVABLE_HEADERS);
-      if (row === -1) return jsonResponse({ success: false, error: 'Receivable not found' });
-      const detailsRow = sheet.getRange(row, 1, 1, RECEIVABLE_HEADERS.length).getValues()[0];
-      const detailsObj = rowToObject(detailsRow, RECEIVABLE_HEADERS);
-      sheet.deleteRow(row);
-      logAudit(
-        user,
-        'Delete Receivable',
-        `ID: ${id}, Name: ${detailsObj.name}, Amount: ৳${detailsObj.amount}`
-      );
-      return jsonResponse({ success: true });
+      const lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(10000);
+        const sheet = getReceivablesSheet();
+        const row = findRowById(sheet, id, RECEIVABLE_HEADERS);
+        if (row === -1) return jsonResponse({ success: false, error: 'Receivable not found' });
+        const detailsRow = sheet.getRange(row, 1, 1, RECEIVABLE_HEADERS.length).getValues()[0];
+        const detailsObj = rowToObject(detailsRow, RECEIVABLE_HEADERS);
+        sheet.deleteRow(row);
+        logAudit(
+          user,
+          'Delete Receivable',
+          `ID: ${id}, Name: ${detailsObj.name}, Amount: ৳${detailsObj.amount}`
+        );
+        return jsonResponse({ success: true });
+      } finally {
+        lock.releaseLock();
+      }
     }
 
     // Payable Actions (Money I Owe)
@@ -1055,6 +1487,12 @@ function doPost(e) {
 
     if (action === 'setOpeningBalance') {
       return jsonResponse(setOpeningBalanceEntry(entry, user));
+    }
+
+    if (action === 'deleteOpeningBalance') {
+      return jsonResponse(deleteOpeningBalanceEntry(
+        { id: body.id || (body.entry ? body.entry.id : null), monthKey: body.monthKey || (body.entry ? body.entry.monthKey : null) }, user
+      ));
     }
 
     // Month Closing Actions
@@ -1076,17 +1514,27 @@ function doPost(e) {
     }
 
     if (action === 'createOtherCashRecord') {
-      const sheet = getOtherCashRecordsSheet();
-      const record = body.record;
-      if (!record.id) record.id = 'oc_' + new Date().getTime().toString();
-      if (!record.createdAt) record.createdAt = new Date().toISOString();
-      sheet.appendRow(objectToRow(record, OTHER_CASH_HEADERS));
-      logAudit(
-        user,
-        'Create Other Cash Record',
-        `ID: ${record.id}, Type: ${record.type}, Source: ${record.source}, Amount: ৳${record.amount}`
-      );
-      return jsonResponse({ success: true, id: record.id });
+      const lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(10000);
+        const sheet = getOtherCashRecordsSheet();
+        const ocRecord = body.record;
+        if (!ocRecord.id) ocRecord.id = 'oc_' + new Date().getTime().toString();
+        if (!ocRecord.createdAt) ocRecord.createdAt = new Date().toISOString();
+        // Idempotency check
+        if (findRowById(sheet, ocRecord.id, OTHER_CASH_HEADERS) !== -1) {
+          return jsonResponse({ success: true, id: ocRecord.id, duplicatePrevented: true });
+        }
+        sheet.appendRow(objectToRow(ocRecord, OTHER_CASH_HEADERS));
+        logAudit(
+          user,
+          'Create Other Cash Record',
+          `ID: ${ocRecord.id}, Type: ${ocRecord.type}, Source: ${ocRecord.source}, Amount: ৳${ocRecord.amount}`
+        );
+        return jsonResponse({ success: true, id: ocRecord.id });
+      } finally {
+        lock.releaseLock();
+      }
     }
 
     if (action === 'updateOtherCashRecord') {
@@ -1106,31 +1554,47 @@ function doPost(e) {
     }
 
     if (action === 'deleteOtherCashRecord') {
-      const sheet = getOtherCashRecordsSheet();
-      const row = findRowById(sheet, id, OTHER_CASH_HEADERS);
-      if (row === -1) return jsonResponse({ success: false, error: 'Other cash record not found' });
-      const detailsRow = sheet.getRange(row, 1, 1, OTHER_CASH_HEADERS.length).getValues()[0];
-      const detailsObj = rowToObject(detailsRow, OTHER_CASH_HEADERS);
-      sheet.deleteRow(row);
-      logAudit(
-        user,
-        'Delete Other Cash Record',
-        `ID: ${id}, Type: ${detailsObj.type}, Source: ${detailsObj.source}, Amount: ৳${detailsObj.amount}`
-      );
-      return jsonResponse({ success: true });
+      const lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(10000);
+        const sheet = getOtherCashRecordsSheet();
+        const row = findRowById(sheet, id, OTHER_CASH_HEADERS);
+        if (row === -1) return jsonResponse({ success: false, error: 'Other cash record not found' });
+        const detailsRow = sheet.getRange(row, 1, 1, OTHER_CASH_HEADERS.length).getValues()[0];
+        const detailsObj = rowToObject(detailsRow, OTHER_CASH_HEADERS);
+        sheet.deleteRow(row);
+        logAudit(
+          user,
+          'Delete Other Cash Record',
+          `ID: ${id}, Type: ${detailsObj.type}, Source: ${detailsObj.source}, Amount: ৳${detailsObj.amount}`
+        );
+        return jsonResponse({ success: true });
+      } finally {
+        lock.releaseLock();
+      }
     }
 
     if (action === 'createPayable') {
-      const sheet = getPayablesSheet();
-      if (!payable.id) payable.id = 'pay_' + new Date().getTime().toString();
-      if (!payable.status) payable.status = 'Unpaid';
-      sheet.appendRow(objectToRow(payable, PAYABLE_HEADERS));
-      logAudit(
-        user,
-        'Create Payable',
-        `ID: ${payable.id}, Name: ${payable.name}, Amount: ৳${payable.amount}`
-      );
-      return jsonResponse({ success: true, id: payable.id });
+      const lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(10000);
+        const sheet = getPayablesSheet();
+        if (!payable.id) payable.id = 'pay_' + new Date().getTime().toString();
+        if (!payable.status) payable.status = 'Unpaid';
+        // Idempotency check
+        if (findRowById(sheet, payable.id, PAYABLE_HEADERS) !== -1) {
+          return jsonResponse({ success: true, id: payable.id, duplicatePrevented: true });
+        }
+        sheet.appendRow(objectToRow(payable, PAYABLE_HEADERS));
+        logAudit(
+          user,
+          'Create Payable',
+          `ID: ${payable.id}, Name: ${payable.name}, Amount: ৳${payable.amount}`
+        );
+        return jsonResponse({ success: true, id: payable.id });
+      } finally {
+        lock.releaseLock();
+      }
     }
 
     if (action === 'updatePayable') {
@@ -1149,18 +1613,24 @@ function doPost(e) {
     }
 
     if (action === 'deletePayable') {
-      const sheet = getPayablesSheet();
-      const row = findRowById(sheet, id, PAYABLE_HEADERS);
-      if (row === -1) return jsonResponse({ success: false, error: 'Payable not found' });
-      const detailsRow = sheet.getRange(row, 1, 1, PAYABLE_HEADERS.length).getValues()[0];
-      const detailsObj = rowToObject(detailsRow, PAYABLE_HEADERS);
-      sheet.deleteRow(row);
-      logAudit(
-        user,
-        'Delete Payable',
-        `ID: ${id}, Name: ${detailsObj.name}, Amount: ৳${detailsObj.amount}`
-      );
-      return jsonResponse({ success: true });
+      const lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(10000);
+        const sheet = getPayablesSheet();
+        const row = findRowById(sheet, id, PAYABLE_HEADERS);
+        if (row === -1) return jsonResponse({ success: false, error: 'Payable not found' });
+        const detailsRow = sheet.getRange(row, 1, 1, PAYABLE_HEADERS.length).getValues()[0];
+        const detailsObj = rowToObject(detailsRow, PAYABLE_HEADERS);
+        sheet.deleteRow(row);
+        logAudit(
+          user,
+          'Delete Payable',
+          `ID: ${id}, Name: ${detailsObj.name}, Amount: ৳${detailsObj.amount}`
+        );
+        return jsonResponse({ success: true });
+      } finally {
+        lock.releaseLock();
+      }
     }
 
     // Admin Actions
@@ -1258,6 +1728,12 @@ function doPost(e) {
     // Consolidated dashboard read — one call replaces 9 separate ones
     if (action === 'getDashboardData') {
       return jsonResponse({ success: true, ...getDashboardData() });
+    }
+
+    if (action === 'cleanupDuplicates') {
+      if (!isAdmin) return jsonResponse({ success: false, error: 'Access Denied: Admins only' });
+      const res = cleanupDuplicateSalesRecords();
+      return jsonResponse(res);
     }
 
     return jsonResponse({ success: false, error: 'Unknown action: ' + action });

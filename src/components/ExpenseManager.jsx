@@ -10,12 +10,13 @@ import {
   UserCheck,
   X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import DatePicker from 'react-datepicker';
 import { format } from 'date-fns';
 import { toast } from 'react-toastify';
 import { getMonthFromDate, sortRecordsByDateDesc } from '../utils/dates';
 import { computeNetCashBalance, sumExpensesFromRecords } from '../utils/finance';
+import { generateUniqueId } from '../utils/api';
 import OverheadExpenses from './OverheadExpenses';
 
 const MONTHS = [
@@ -54,7 +55,7 @@ const hasAnyExpense = form =>
 
 const buildExpensePayload = (form, editingId, existingRecord = null) => ({
   ...(existingRecord || {}),
-  id: editingId || String(Date.now()),
+  id: editingId || generateUniqueId('rec'),
   date: form.date,
   month: form.month,
   merchantName: form.merchantName || '',
@@ -95,6 +96,7 @@ export default function ExpenseManager({
   const [form, setForm] = useState(emptyExpenseForm());
   const [editingRecord, setEditingRecord] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [showAddMerchant, setShowAddMerchant] = useState(false);
   const [newMerchant, setNewMerchant] = useState('');
 
@@ -207,40 +209,54 @@ export default function ExpenseManager({
 
   const handleSubmit = async e => {
     e.preventDefault();
-    if (isSubmitting) return;
+    if (isSubmittingRef.current || isSubmitting) return;
     if (!hasAnyExpense(form)) {
       toast.error('Enter at least one expense amount (rider wage, variable, or fixed).');
       return;
     }
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     try {
       const payload = buildExpensePayload(form, editingRecord?.id, editingRecord);
+      let success = false;
       if (editingRecord?.id) {
-        await onUpdateRecord(payload);
+        success = await onUpdateRecord(payload);
       } else {
-        await onAddRecord(payload);
+        success = await onAddRecord(payload);
       }
-      setIsOpen(false);
-      setForm(emptyExpenseForm());
-      setEditingRecord(null);
+      if (success !== false) {
+        setIsOpen(false);
+        setForm(emptyExpenseForm());
+        setEditingRecord(null);
+      }
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
 
   const handleDeleteItem = async item => {
+    if (!item?.originalRecord?.id) return;
     const record = item.originalRecord;
     const hasSales = (parseFloat(record.salesAmount) || 0) > 0;
 
-    if (!hasSales) {
+    const remainingRider = item.field === 'rider' ? 0 : (parseFloat(record.riderSalary) || 0);
+    const remainingOther = item.field === 'other' ? 0 : (parseFloat(record.otherExpense) || 0);
+    const remainingFixed = item.field === 'fixed' ? 0 : (parseFloat(record.fixedExpense) || 0);
+    const otherExpensesRemaining = remainingRider > 0 || remainingOther > 0 || remainingFixed > 0;
+
+    if (!hasSales && !otherExpensesRemaining) {
       if (window.confirm('Delete this expense entry permanently?')) {
         await onDeleteRecord(record.id);
       }
       return;
     }
 
-    if (!window.confirm('Remove this expense line from the linked sales record?')) return;
+    const confirmMsg = hasSales
+      ? 'Remove this expense line from the linked sales record?'
+      : 'Remove this expense line? Other expenses on this record will be preserved.';
+    if (!window.confirm(confirmMsg)) return;
 
     const updated = { ...record };
     if (item.field === 'rider') {

@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { X, Search, Filter, PlusCircle, Edit2, Trash2, Calendar, DollarSign, FileText, Coins } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { sortRecordsByDateDesc } from '../utils/dates';
+import { generateUniqueId } from '../utils/api';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -27,6 +28,7 @@ export default function OtherCashManager({
   const [form, setForm] = useState(defaultForm);
   const [editingId, setEditingId] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterMonth, setFilterMonth] = useState('All');
   const [filterType, setFilterType] = useState('All');
@@ -56,17 +58,18 @@ export default function OtherCashManager({
 
   const handleSubmit = async e => {
     e.preventDefault();
-    if (isSubmitting) return;
-    setIsSubmitting(true);
+    if (isSubmittingRef.current || isSubmitting) return;
 
     if (!form.source || !form.amount) {
       toast.error('Source and Amount are required');
-      setIsSubmitting(false);
       return;
     }
 
+    isSubmittingRef.current = true;
+    setIsSubmitting(true);
+
     const payload = {
-      id: editingId || `oc_${Date.now()}`,
+      id: editingId || generateUniqueId('oc'),
       date: form.date,
       month: form.month,
       source: form.source,
@@ -77,22 +80,27 @@ export default function OtherCashManager({
     };
 
     try {
+      let success = false;
       if (editingId) {
-        await onUpdateRecord(payload);
+        success = await onUpdateRecord(payload);
       } else {
-        await onAddRecord(payload);
+        success = await onAddRecord(payload);
       }
-      setIsOpen(false);
-      setForm(defaultForm);
-      setEditingId(null);
+      if (success !== false) {
+        setIsOpen(false);
+        setForm(defaultForm);
+        setEditingId(null);
+      }
     } catch (err) {
       toast.error(err.message);
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
 
   const handleDelete = async id => {
+    if (!id) return;
     if (!window.confirm('Delete this Other Cash record? This cannot be undone.')) return;
     try {
       await onDeleteRecord(id);

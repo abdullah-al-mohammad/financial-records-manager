@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import AdminPanel from './components/AdminPanel';
@@ -15,8 +15,9 @@ import Sidebar from './components/Sidebar';
 import { api, clearSession, getCurrentSession } from './utils/api';
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState(() => getCurrentSession());
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [visitedTabs, setVisitedTabs] = useState(() => new Set(['dashboard']));
   const [records, setRecords] = useState([]);
   const [payments, setPayments] = useState([]);
   const [merchants, setMerchants] = useState([]);
@@ -30,8 +31,12 @@ export default function App() {
   // Edit target bridging from Expense to Sales
   const [editTarget, setEditTarget] = useState(null);
 
-  // States
-  const [loading, setLoading] = useState(false);
+  // Loading States
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const initialLoadedRef = useRef(false);
+  const pendingOperationsRef = useRef(new Set());
+
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem('financial_manager_theme') || 'auto';
   });
@@ -42,6 +47,16 @@ export default function App() {
     else if (type === 'info') toast.info(msg);
     else toast.success(msg);
   }, []);
+
+  // Track visited tabs to keep them mounted without remounting overhead
+  useEffect(() => {
+    setVisitedTabs(prev => {
+      if (prev.has(activeTab)) return prev;
+      const next = new Set(prev);
+      next.add(activeTab);
+      return next;
+    });
+  }, [activeTab]);
 
   // Theme Loader and Sync Effect
   useEffect(() => {
@@ -81,13 +96,13 @@ export default function App() {
     }
   }, [theme]);
 
-  // Check Session on Mount
+  // Check Session on Mount if not already loaded
   useEffect(() => {
     const session = getCurrentSession();
-    if (session) {
+    if (session && !currentUser) {
       setCurrentUser(session);
     }
-  }, []);
+  }, [currentUser]);
 
   // Auth Handlers
   const handleLogout = useCallback(() => {
@@ -102,27 +117,35 @@ export default function App() {
     setMonthClosings([]);
     setOpeningBalances([]);
     setOtherCashRecords([]);
-
+    setVisitedTabs(new Set(['dashboard']));
+    initialLoadedRef.current = false;
+    setIsInitialLoading(true);
+    setIsSyncing(false);
     setActiveTab('dashboard');
   }, []);
 
   // Fetch Database Values
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async ({ forceRefresh = false } = {}) => {
     if (!currentUser) return;
-    setLoading(true);
+    if (!initialLoadedRef.current) {
+      setIsInitialLoading(true);
+    } else {
+      setIsSyncing(true);
+    }
     try {
       // Primary path: single consolidated API call (live + mock)
-      const result = await api.getDashboardData();
+      const result = await api.getDashboardData({ forceRefresh });
 
-      setRecords(result.records);
-      setPayments(result.payments);
-      setMerchants(result.merchants);
-      setTransfers(result.transfers);
-      setReceivables(result.receivables);
-      setPayables(result.payables);
-      setMonthClosings(result.monthClosings);
-      setOpeningBalances(result.openingBalances);
-      setOtherCashRecords(result.otherCashRecords);
+      setRecords(result.records || []);
+      setPayments(result.payments || []);
+      setMerchants(result.merchants || []);
+      setTransfers(result.transfers || []);
+      setReceivables(result.receivables || []);
+      setPayables(result.payables || []);
+      setMonthClosings(result.monthClosings || []);
+      setOpeningBalances(result.openingBalances || []);
+      setOtherCashRecords(result.otherCashRecords || []);
+      initialLoadedRef.current = true;
     } catch (err) {
       // Fallback: if the consolidated endpoint fails (e.g. old backend
       // deployment that doesn't have getDashboardData yet), load each
@@ -139,26 +162,28 @@ export default function App() {
           openingBalancesResult,
           otherCashRecordsResult,
         ] = await Promise.allSettled([
-          api.getAllRecords(),
-          api.getAllPayments(),
-          api.getMerchants(),
-          api.getAllTransfers(),
-          api.getAllReceivables(),
-          api.getAllPayables(),
-          api.getAllMonthClosings(),
-          api.getOpeningBalances(),
-          api.getAllOtherCashRecords(),
+          api.getAllRecords({ forceRefresh }),
+          api.getAllPayments({ forceRefresh }),
+          api.getMerchants({ forceRefresh }),
+          api.getAllTransfers({ forceRefresh }),
+          api.getAllReceivables({ forceRefresh }),
+          api.getAllPayables({ forceRefresh }),
+          api.getAllMonthClosings({ forceRefresh }),
+          api.getOpeningBalances({ forceRefresh }),
+          api.getAllOtherCashRecords({ forceRefresh }),
         ]);
 
-        if (recordsResult.status === 'fulfilled') setRecords(recordsResult.value);
-        if (paymentsResult.status === 'fulfilled') setPayments(paymentsResult.value);
-        if (merchantsResult.status === 'fulfilled') setMerchants(merchantsResult.value);
-        if (transfersResult.status === 'fulfilled') setTransfers(transfersResult.value);
-        if (receivablesResult.status === 'fulfilled') setReceivables(receivablesResult.value);
-        if (payablesResult.status === 'fulfilled') setPayables(payablesResult.value);
-        if (monthClosingsResult.status === 'fulfilled') setMonthClosings(monthClosingsResult.value);
-        if (openingBalancesResult.status === 'fulfilled') setOpeningBalances(openingBalancesResult.value);
-        if (otherCashRecordsResult.status === 'fulfilled') setOtherCashRecords(otherCashRecordsResult.value);
+        if (recordsResult.status === 'fulfilled') setRecords(recordsResult.value || []);
+        if (paymentsResult.status === 'fulfilled') setPayments(paymentsResult.value || []);
+        if (merchantsResult.status === 'fulfilled') setMerchants(merchantsResult.value || []);
+        if (transfersResult.status === 'fulfilled') setTransfers(transfersResult.value || []);
+        if (receivablesResult.status === 'fulfilled') setReceivables(receivablesResult.value || []);
+        if (payablesResult.status === 'fulfilled') setPayables(payablesResult.value || []);
+        if (monthClosingsResult.status === 'fulfilled') setMonthClosings(monthClosingsResult.value || []);
+        if (openingBalancesResult.status === 'fulfilled') setOpeningBalances(openingBalancesResult.value || []);
+        if (otherCashRecordsResult.status === 'fulfilled') setOtherCashRecords(otherCashRecordsResult.value || []);
+
+        initialLoadedRef.current = true;
 
         const failures = [
           recordsResult, paymentsResult, merchantsResult, transfersResult,
@@ -173,7 +198,8 @@ export default function App() {
         showToast(`Network Sync Error: ${fallbackErr.message}`, 'error');
       }
     } finally {
-      setLoading(false);
+      setIsInitialLoading(false);
+      setIsSyncing(false);
     }
   }, [currentUser, showToast]);
 
@@ -196,53 +222,55 @@ export default function App() {
   const handleLoginSuccess = () => {
     const session = getCurrentSession();
     setCurrentUser(session);
+    initialLoadedRef.current = false;
+    setIsInitialLoading(true);
     showToast('Logged in successfully!');
   };
 
+  // Generic operation runner with active operation deduplication
+  const executeOperation = useCallback(async (opKey, operation, successMsg, errorPrefix) => {
+    if (pendingOperationsRef.current.has(opKey)) return false;
+    pendingOperationsRef.current.add(opKey);
+    setIsSyncing(true);
+    try {
+      const resp = await operation();
+      if (resp && resp.success !== false) {
+        if (successMsg) showToast(successMsg);
+        await fetchData({ forceRefresh: true });
+        return true;
+      }
+      return false;
+    } catch (err) {
+      showToast(`${errorPrefix}: ${err.message}`, 'error');
+      return false;
+    } finally {
+      pendingOperationsRef.current.delete(opKey);
+      setIsSyncing(false);
+    }
+  }, [fetchData, showToast]);
+
   // Transaction Operations (CRUD)
   const handleAddRecord = async record => {
-    setLoading(true);
-    try {
-      const resp = await api.createRecord(record);
-      if (resp.success) {
-        showToast('Sales record logged successfully!');
-        await fetchData();
-      }
-    } catch (err) {
-      showToast(`Creation Failed: ${err.message}`, 'error');
-    } finally {
-      setLoading(false);
-    }
+    const opKey = record?.id ? `record_create_${record.id}` : 'record_create';
+    return await executeOperation(opKey, () => api.createRecord(record), 'Sales record logged successfully!', 'Creation Failed');
   };
 
   const handleUpdateRecord = async record => {
-    setLoading(true);
-    try {
-      const resp = await api.updateRecord(record);
-      if (resp.success) {
-        showToast('Sales record updated!');
-        await fetchData();
-      }
-    } catch (err) {
-      showToast(`Update Failed: ${err.message}`, 'error');
-    } finally {
-      setLoading(false);
-    }
+    return await executeOperation(`record_update_${record.id}`, () => api.updateRecord(record), 'Sales record updated!', 'Update Failed');
   };
 
   const handleDeleteRecord = async id => {
-    setLoading(true);
-    try {
-      const resp = await api.deleteRecord(id);
-      if (resp.success) {
-        showToast('Record deleted successfully.');
-        await fetchData();
-      }
-    } catch (err) {
-      showToast(`Deletion Failed: ${err.message}`, 'error');
-    } finally {
-      setLoading(false);
-    }
+    if (!id) return false;
+    return await executeOperation(`record_delete_${id}`, () => api.deleteRecord(id), 'Record deleted successfully.', 'Deletion Failed');
+  };
+
+  const handleDeleteAllRecords = async () => {
+    return await executeOperation(
+      'records_delete_all',
+      () => api.deleteAllRecords(),
+      'All sales records deleted.',
+      'Deletion Failed'
+    );
   };
 
   const handleAddMerchant = name => {
@@ -259,260 +287,102 @@ export default function App() {
 
   // Payment Operations (CRUD)
   const handleAddPayment = async payment => {
-    setLoading(true);
-    try {
-      const resp = await api.createPayment(payment);
-      if (resp.success) {
-        showToast('Merchant payout recorded!');
-        await fetchData();
-      }
-    } catch (err) {
-      showToast(`Payout Logging Failed: ${err.message}`, 'error');
-    } finally {
-      setLoading(false);
-    }
+    const opKey = payment?.id ? `payment_create_${payment.id}` : 'payment_create';
+    return await executeOperation(opKey, () => api.createPayment(payment), 'Merchant payout recorded!', 'Payout Logging Failed');
   };
 
   const handleUpdatePayment = async payment => {
-    setLoading(true);
-    try {
-      const resp = await api.updatePayment(payment);
-      if (resp.success) {
-        showToast('Payout log updated!');
-        await fetchData();
-      }
-    } catch (err) {
-      showToast(`Payout Update Failed: ${err.message}`, 'error');
-    } finally {
-      setLoading(false);
-    }
+    return await executeOperation(`payment_update_${payment.id}`, () => api.updatePayment(payment), 'Payout log updated!', 'Payout Update Failed');
   };
 
   const handleDeletePayment = async id => {
-    setLoading(true);
-    try {
-      const resp = await api.deletePayment(id);
-      if (resp.success) {
-        showToast('Payout log removed.');
-        await fetchData();
-      }
-    } catch (err) {
-      showToast(`Payout Deletion Failed: ${err.message}`, 'error');
-    } finally {
-      setLoading(false);
-    }
+    if (!id) return false;
+    return await executeOperation(`payment_delete_${id}`, () => api.deletePayment(id), 'Payout log removed.', 'Payout Deletion Failed');
   };
 
   // Balance Transfer Operations
   const handleAddTransfer = async transfer => {
-    setLoading(true);
-    try {
-      const resp = await api.createTransfer(transfer);
-      if (resp.success) {
-        showToast('Transfer recorded successfully!');
-        await fetchData();
-      }
-    } catch (err) {
-      showToast(`Transfer Failed: ${err.message}`, 'error');
-    } finally {
-      setLoading(false);
-    }
+    const opKey = transfer?.id ? `transfer_create_${transfer.id}` : 'transfer_create';
+    return await executeOperation(opKey, () => api.createTransfer(transfer), 'Transfer recorded successfully!', 'Transfer Failed');
   };
 
   const handleDeleteTransfer = async id => {
-    setLoading(true);
-    try {
-      const resp = await api.deleteTransfer(id);
-      if (resp.success) {
-        showToast('Transfer record removed.');
-        await fetchData();
-      }
-    } catch (err) {
-      showToast(`Transfer Deletion Failed: ${err.message}`, 'error');
-    } finally {
-      setLoading(false);
-    }
+    if (!id) return false;
+    return await executeOperation(`transfer_delete_${id}`, () => api.deleteTransfer(id), 'Transfer record removed.', 'Transfer Deletion Failed');
   };
 
   // Receivable Operations (CRUD)
   const handleAddReceivable = async receivable => {
-    setLoading(true);
-    try {
-      const resp = await api.createReceivable(receivable);
-      if (resp.success) {
-        showToast('Receivable record logged successfully!');
-        await fetchData();
-      }
-    } catch (err) {
-      showToast(`Creation Failed: ${err.message}`, 'error');
-    } finally {
-      setLoading(false);
-    }
+    const opKey = receivable?.id ? `receivable_create_${receivable.id}` : 'receivable_create';
+    return await executeOperation(opKey, () => api.createReceivable(receivable), 'Receivable record logged successfully!', 'Creation Failed');
   };
 
   const handleUpdateReceivable = async receivable => {
-    setLoading(true);
-    try {
-      const resp = await api.updateReceivable(receivable);
-      if (resp.success) {
-        if (receivable.status === 'Received') {
-          showToast(`Payment received and deposited to cash balance!`);
-        } else {
-          showToast('Receivable record updated!');
-        }
-        await fetchData();
-      }
-    } catch (err) {
-      showToast(`Update Failed: ${err.message}`, 'error');
-    } finally {
-      setLoading(false);
-    }
+    const successMsg = receivable.status === 'Received'
+      ? 'Payment received and deposited to cash balance!'
+      : 'Receivable record updated!';
+    return await executeOperation(`receivable_update_${receivable.id}`, () => api.updateReceivable(receivable), successMsg, 'Update Failed');
   };
 
   const handleDeleteReceivable = async id => {
-    setLoading(true);
-    try {
-      const resp = await api.deleteReceivable(id);
-      if (resp.success) {
-        showToast('Receivable record removed.');
-        await fetchData();
-      }
-    } catch (err) {
-      showToast(`Deletion Failed: ${err.message}`, 'error');
-    } finally {
-      setLoading(false);
-    }
+    if (!id) return false;
+    return await executeOperation(`receivable_delete_${id}`, () => api.deleteReceivable(id), 'Receivable record removed.', 'Deletion Failed');
   };
 
   // Payable Operations (CRUD)
   const handleAddPayable = async payable => {
-    setLoading(true);
-    try {
-      const resp = await api.createPayable(payable);
-      if (resp.success) {
-        showToast('Payable record logged successfully!');
-        await fetchData();
-      }
-    } catch (err) {
-      showToast(`Creation Failed: ${err.message}`, 'error');
-    } finally {
-      setLoading(false);
-    }
+    const opKey = payable?.id ? `payable_create_${payable.id}` : 'payable_create';
+    return await executeOperation(opKey, () => api.createPayable(payable), 'Payable record logged successfully!', 'Creation Failed');
   };
 
   const handleUpdatePayable = async payable => {
-    setLoading(true);
-    try {
-      const resp = await api.updatePayable(payable);
-      if (resp.success) {
-        if (payable.status === 'Paid') {
-          showToast(`Payment recorded! Deducted from cash balance.`);
-        } else {
-          showToast('Payable record updated!');
-        }
-        await fetchData();
-      }
-    } catch (err) {
-      showToast(`Update Failed: ${err.message}`, 'error');
-    } finally {
-      setLoading(false);
-    }
+    const successMsg = payable.status === 'Paid'
+      ? 'Payment recorded! Deducted from cash balance.'
+      : 'Payable record updated!';
+    return await executeOperation(`payable_update_${payable.id}`, () => api.updatePayable(payable), successMsg, 'Update Failed');
   };
 
   const handleDeletePayable = async id => {
-    setLoading(true);
-    try {
-      const resp = await api.deletePayable(id);
-      if (resp.success) {
-        showToast('Payable record removed.');
-        await fetchData();
-      }
-    } catch (err) {
-      showToast(`Deletion Failed: ${err.message}`, 'error');
-    } finally {
-      setLoading(false);
-    }
+    if (!id) return false;
+    return await executeOperation(`payable_delete_${id}`, () => api.deletePayable(id), 'Payable record removed.', 'Deletion Failed');
   };
 
   // Opening Balance Operations (one record per calendar month)
   const handleSetOpeningBalance = async entry => {
-    setLoading(true);
-    try {
-      await api.setOpeningBalance(entry);
-      showToast('Opening balance saved successfully!');
-      await fetchData();
-    } catch (err) {
-      showToast(`Failed to save opening balance: ${err.message}`, 'error');
-    } finally {
-      setLoading(false);
-    }
+    return await executeOperation(`ob_${entry.monthKey}`, () => api.setOpeningBalance(entry), 'Opening balance saved successfully!', 'Failed to save opening balance');
+  };
+
+  const handleDeleteOpeningBalance = async entry => {
+    return await executeOperation(
+      `ob_delete_${entry.monthKey || entry.id}`,
+      () => api.deleteOpeningBalance(entry),
+      'Opening balance removed successfully!',
+      'Failed to remove opening balance'
+    );
   };
 
   // Month Closing Operations
   const handleAddMonthClosing = async entry => {
-    setLoading(true);
-    try {
-      const resp = await api.createMonthClosing(entry);
-      if (resp.success) {
-        showToast(`${entry.month} ${entry.year} closed successfully! Carry-forward balance saved.`);
-        await fetchData();
-      }
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      setLoading(false);
-    }
+    return await executeOperation(`mc_${entry.monthKey}`, () => api.createMonthClosing(entry), `${entry.month} ${entry.year} closed successfully! Carry-forward balance saved.`, 'Month closing failed');
   };
 
-  // Bridge navigation from Expense logs to Sales drawer edit (legacy — no longer used)
   const clearEditTarget = () => {
     setEditTarget(null);
   };
 
   // Other Cash Records Operations (CRUD)
   const handleAddOtherCashRecord = async record => {
-    setLoading(true);
-    try {
-      const resp = await api.createOtherCashRecord(record);
-      if (resp.success) {
-        showToast('Other cash record created successfully!');
-        await fetchData();
-      }
-    } catch (err) {
-      showToast(`Creation Failed: ${err.message}`, 'error');
-    } finally {
-      setLoading(false);
-    }
+    const opKey = record?.id ? `other_cash_create_${record.id}` : 'other_cash_create';
+    return await executeOperation(opKey, () => api.createOtherCashRecord(record), 'Other cash record created successfully!', 'Creation Failed');
   };
 
   const handleUpdateOtherCashRecord = async record => {
-    setLoading(true);
-    try {
-      const resp = await api.updateOtherCashRecord(record);
-      if (resp.success) {
-        showToast('Other cash record updated!');
-        await fetchData();
-      }
-    } catch (err) {
-      showToast(`Update Failed: ${err.message}`, 'error');
-    } finally {
-      setLoading(false);
-    }
+    return await executeOperation(`other_cash_update_${record.id}`, () => api.updateOtherCashRecord(record), 'Other cash record updated!', 'Update Failed');
   };
 
   const handleDeleteOtherCashRecord = async id => {
-    setLoading(true);
-    try {
-      const resp = await api.deleteOtherCashRecord(id);
-      if (resp.success) {
-        showToast('Other cash record removed.');
-        await fetchData();
-      }
-    } catch (err) {
-      showToast(`Deletion Failed: ${err.message}`, 'error');
-    } finally {
-      setLoading(false);
-    }
+    if (!id) return false;
+    return await executeOperation(`other_cash_delete_${id}`, () => api.deleteOtherCashRecord(id), 'Other cash record removed.', 'Deletion Failed');
   };
 
   // Authentication gate
@@ -520,106 +390,124 @@ export default function App() {
     return <Login onLoginSuccess={handleLoginSuccess} />;
   }
 
-  // Active View router
-  const renderActiveTab = () => {
-    switch (activeTab) {
-      case 'dashboard': {
-        const now = new Date();
-        const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-        const currentOpening = openingBalances.find(o => o.monthKey === currentMonthKey) || null;
+  // Active View tabs rendered with keep-alive visibility toggling
+  const renderTabs = () => {
+    const now = new Date();
+    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const currentOpening = openingBalances.find(o => o.monthKey === currentMonthKey) || null;
 
-        return (
-          <Dashboard
-            records={records}
-            payments={payments}
-            transfers={transfers}
-            receivables={receivables}
-            payables={payables}
-            otherCashRecords={otherCashRecords}
-            setActiveTab={setActiveTab}
-            onAddTransfer={handleAddTransfer}
-            onDeleteTransfer={handleDeleteTransfer}
-            monthClosings={monthClosings}
-            openingBalances={openingBalances}
-            currentOpeningBalance={currentOpening}
-            onAddMonthClosing={handleAddMonthClosing}
-            onSetOpeningBalance={handleSetOpeningBalance}
-          />
-        );
-      }
-      case 'sales':
-        return (
-          <SalesManager
-            records={records}
-            payments={payments}
-            merchants={merchants}
-            onAddRecord={handleAddRecord}
-            onUpdateRecord={handleUpdateRecord}
-            onDeleteRecord={handleDeleteRecord}
-            onAddMerchant={handleAddMerchant}
-            editTarget={editTarget}
-            clearEditTarget={clearEditTarget}
-          />
-        );
-      case 'expenses':
-        return (
-          <ExpenseManager
-            records={records}
-            payments={payments}
-            merchants={merchants}
-            onAddRecord={handleAddRecord}
-            onUpdateRecord={handleUpdateRecord}
-            onDeleteRecord={handleDeleteRecord}
-            onAddMerchant={handleAddMerchant}
-          />
-        );
-      case 'billing':
-        return (
-          <BillingManager
-            records={records}
-            payments={payments}
-            merchants={merchants}
-            onAddPayment={handleAddPayment}
-            onUpdatePayment={handleUpdatePayment}
-            onDeletePayment={handleDeletePayment}
-          />
-        );
-      case 'receivables':
-        return (
-          <ReceivableManager
-            receivables={receivables}
-            onAddReceivable={handleAddReceivable}
-            onUpdateReceivable={handleUpdateReceivable}
-            onDeleteReceivable={handleDeleteReceivable}
-            payables={payables}
-            onAddPayable={handleAddPayable}
-            onUpdatePayable={handleUpdatePayable}
-            onDeletePayable={handleDeletePayable}
-          />
-        );
-      case 'otherCash':
-        return (
-          <OtherCashManager
-            otherCashRecords={otherCashRecords}
-            onAddRecord={handleAddOtherCashRecord}
-            onUpdateRecord={handleUpdateOtherCashRecord}
-            onDeleteRecord={handleDeleteOtherCashRecord}
-          />
-        );
-      case 'history':
-        return (
-          <HistoryManager
-            records={records}
-            payments={payments}
-            transfers={transfers}
-            onDeleteTransfer={handleDeleteTransfer}
-          />
-        );
-      case 'admin':
-        return <AdminPanel currentUser={currentUser} onShowToast={showToast} />;
-      default:
-        return <div className="text-center py-20 text-slate-400">View component not found.</div>;
-    }
+    return (
+      <>
+        {visitedTabs.has('dashboard') && (
+          <div className={activeTab === 'dashboard' ? '' : 'hidden'}>
+            <Dashboard
+              records={records}
+              payments={payments}
+              transfers={transfers}
+              receivables={receivables}
+              payables={payables}
+              otherCashRecords={otherCashRecords}
+              setActiveTab={setActiveTab}
+              onAddTransfer={handleAddTransfer}
+              onDeleteTransfer={handleDeleteTransfer}
+              monthClosings={monthClosings}
+              openingBalances={openingBalances}
+              currentOpeningBalance={currentOpening}
+              onAddMonthClosing={handleAddMonthClosing}
+              onSetOpeningBalance={handleSetOpeningBalance}
+              onDeleteOpeningBalance={handleDeleteOpeningBalance}
+            />
+          </div>
+        )}
+
+        {visitedTabs.has('sales') && (
+          <div className={activeTab === 'sales' ? '' : 'hidden'}>
+            <SalesManager
+              records={records}
+              payments={payments}
+              merchants={merchants}
+              onAddRecord={handleAddRecord}
+              onUpdateRecord={handleUpdateRecord}
+              onDeleteRecord={handleDeleteRecord}
+              onDeleteAllRecords={handleDeleteAllRecords}
+              onAddMerchant={handleAddMerchant}
+              editTarget={editTarget}
+              clearEditTarget={clearEditTarget}
+            />
+          </div>
+        )}
+
+        {visitedTabs.has('expenses') && (
+          <div className={activeTab === 'expenses' ? '' : 'hidden'}>
+            <ExpenseManager
+              records={records}
+              payments={payments}
+              merchants={merchants}
+              onAddRecord={handleAddRecord}
+              onUpdateRecord={handleUpdateRecord}
+              onDeleteRecord={handleDeleteRecord}
+              onAddMerchant={handleAddMerchant}
+            />
+          </div>
+        )}
+
+        {visitedTabs.has('billing') && (
+          <div className={activeTab === 'billing' ? '' : 'hidden'}>
+            <BillingManager
+              records={records}
+              payments={payments}
+              merchants={merchants}
+              onAddPayment={handleAddPayment}
+              onUpdatePayment={handleUpdatePayment}
+              onDeletePayment={handleDeletePayment}
+            />
+          </div>
+        )}
+
+        {visitedTabs.has('receivables') && (
+          <div className={activeTab === 'receivables' ? '' : 'hidden'}>
+            <ReceivableManager
+              receivables={receivables}
+              onAddReceivable={handleAddReceivable}
+              onUpdateReceivable={handleUpdateReceivable}
+              onDeleteReceivable={handleDeleteReceivable}
+              payables={payables}
+              onAddPayable={handleAddPayable}
+              onUpdatePayable={handleUpdatePayable}
+              onDeletePayable={handleDeletePayable}
+            />
+          </div>
+        )}
+
+        {visitedTabs.has('otherCash') && (
+          <div className={activeTab === 'otherCash' ? '' : 'hidden'}>
+            <OtherCashManager
+              otherCashRecords={otherCashRecords}
+              onAddRecord={handleAddOtherCashRecord}
+              onUpdateRecord={handleUpdateOtherCashRecord}
+              onDeleteRecord={handleDeleteOtherCashRecord}
+            />
+          </div>
+        )}
+
+        {visitedTabs.has('history') && (
+          <div className={activeTab === 'history' ? '' : 'hidden'}>
+            <HistoryManager
+              records={records}
+              payments={payments}
+              transfers={transfers}
+              onDeleteTransfer={handleDeleteTransfer}
+            />
+          </div>
+        )}
+
+        {visitedTabs.has('admin') && (
+          <div className={activeTab === 'admin' ? '' : 'hidden'}>
+            <AdminPanel currentUser={currentUser} onShowToast={showToast} />
+          </div>
+        )}
+      </>
+    );
   };
 
   return (
@@ -662,8 +550,8 @@ export default function App() {
       {/* Core Workspace Panel */}
       <main className="flex-1 lg:pl-64 min-w-0 relative z-10">
         <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
-          {/* Refresh overlay blocker */}
-          {loading && records.length === 0 ? (
+          {/* Initial loading blocker — only displayed before initial load completes */}
+          {isInitialLoading ? (
             <div className="min-h-[50vh] flex flex-col items-center justify-center gap-3">
               <span className="w-8 h-8 border-3 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin" />
               <span className="text-xs text-slate-500 font-bold uppercase tracking-wider animate-pulse">
@@ -672,15 +560,16 @@ export default function App() {
             </div>
           ) : (
             <>
-              {loading && (
-                <div className="fixed bottom-5 right-5 z-50 glass-panel border border-indigo-500/30 px-4 py-2 rounded-2xl flex items-center gap-2.5 shadow-xl shadow-indigo-950/20">
+              {/* Subtle background syncing pill */}
+              {isSyncing && (
+                <div className="fixed bottom-5 right-5 z-50 glass-panel border border-indigo-500/30 px-4 py-2 rounded-2xl flex items-center gap-2.5 shadow-xl shadow-indigo-950/20 pointer-events-none">
                   <span className="w-3.5 h-3.5 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
                   <span className="text-[11px] font-bold text-indigo-300 uppercase tracking-wider">
                     Syncing...
                   </span>
                 </div>
               )}
-              {renderActiveTab()}
+              {renderTabs()}
             </>
           )}
         </div>

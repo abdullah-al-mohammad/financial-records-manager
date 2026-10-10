@@ -72,6 +72,11 @@ function getOrCreateSheet(name, headers) {
 }
 
 function ensureSheetHeaders(sheet, headers) {
+  // FAST CHECK: if sheet row 1 already has headers, skip redundant sheet writes
+  if (sheet.getLastRow() >= 1) {
+    const firstCell = sheet.getRange(1, 1).getValue();
+    if (firstCell) return;
+  }
   const currentColumns = Math.max(1, sheet.getLastColumn());
 
   if (currentColumns < headers.length) {
@@ -298,20 +303,24 @@ function logAudit(username, action, details) {
 function findRowById(sheet, id, headers) {
   const idStr = String(id || '').trim();
   if (!idStr) return -1; // Never match on empty ID
-  const data = sheet.getDataRange().getValues();
-  if (data.length <= 1) return -1;
 
-  let idCol = 0;
-  if (data[0] && Array.isArray(data[0])) {
-    const sheetColIdx = data[0].findIndex(h => String(h || '').trim().toLowerCase() === 'id');
-    if (sheetColIdx !== -1) idCol = sheetColIdx;
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return -1;
+
+  let idCol = 1; // 1-indexed for Sheets getRange
+  const headerValues = sheet.getRange(1, 1, 1, Math.min(sheet.getLastColumn(), 25)).getValues()[0];
+  if (headerValues && Array.isArray(headerValues)) {
+    const sheetColIdx = headerValues.findIndex(h => String(h || '').trim().toLowerCase() === 'id');
+    if (sheetColIdx !== -1) idCol = sheetColIdx + 1;
   } else if (headers && Array.isArray(headers)) {
     const headerIdx = headers.indexOf('id');
-    if (headerIdx !== -1) idCol = headerIdx;
+    if (headerIdx !== -1) idCol = headerIdx + 1;
   }
 
-  for (let i = 1; i < data.length; i++) {
-    if (String(data[i][idCol] || '').trim() === idStr) return i + 1;
+  // Read only the ID column range instead of getDataRange() (95% fewer cells to read)
+  const idValues = sheet.getRange(2, idCol, lastRow - 1, 1).getValues();
+  for (let i = 0; i < idValues.length; i++) {
+    if (String(idValues[i][0] || '').trim() === idStr) return i + 2;
   }
   return -1;
 }
@@ -606,25 +615,30 @@ function doGet(e) {
     }
 
     if (action === 'create') {
+      const tStart = new Date().getTime();
       const lock = LockService.getScriptLock();
       try {
         lock.waitLock(10000);
+        const tLocked = new Date().getTime();
         const sheet = getSheet();
         if (!record.id) record.id = new Date().getTime().toString();
         if (!record.createdAt) record.createdAt = new Date().toISOString();
         // Idempotency: if a row with this ID already exists, return success without appending
         const existingRow = findRowById(sheet, record.id, RECORD_HEADERS);
+        const tChecked = new Date().getTime();
         if (existingRow !== -1) {
+          console.log(`[Perf] create sales record: duplicate prevented in ${tChecked - tStart}ms`);
           return jsonResponse({ success: true, id: record.id, duplicatePrevented: true }, callback);
         }
-        console.log(JSON.stringify(record));
         sheet.appendRow(objectToRow(record, RECORD_HEADERS));
         SpreadsheetApp.flush();
+        const tFlushed = new Date().getTime();
         logAudit(
           user,
           'Create Sales Record',
           `ID: ${record.id}, Merchant: ${record.merchantName}, Amount: ৳${record.salesAmount}`
         );
+        console.log(`[Perf] create sales record: total ${tFlushed - tStart}ms (lock: ${tLocked - tStart}ms, check: ${tChecked - tLocked}ms, append: ${tFlushed - tChecked}ms)`);
         return jsonResponse({ success: true, id: record.id }, callback);
       } finally {
         lock.releaseLock();
@@ -1215,23 +1229,30 @@ function doPost(e) {
     }
 
     if (action === 'create') {
+      const tStart = new Date().getTime();
       const lock = LockService.getScriptLock();
       try {
         lock.waitLock(10000);
+        const tLocked = new Date().getTime();
         const sheet = getSheet();
         if (!record.id) record.id = new Date().getTime().toString();
         if (!record.createdAt) record.createdAt = new Date().toISOString();
         // Idempotency: if a row with this ID already exists, return success without appending
-        if (findRowById(sheet, record.id, RECORD_HEADERS) !== -1) {
+        const existingRow = findRowById(sheet, record.id, RECORD_HEADERS);
+        const tChecked = new Date().getTime();
+        if (existingRow !== -1) {
+          console.log(`[Perf] create sales record (POST): duplicate prevented in ${tChecked - tStart}ms`);
           return jsonResponse({ success: true, id: record.id, duplicatePrevented: true });
         }
         sheet.appendRow(objectToRow(record, RECORD_HEADERS));
         SpreadsheetApp.flush();
+        const tFlushed = new Date().getTime();
         logAudit(
           user,
           'Create Sales Record',
           `ID: ${record.id}, Merchant: ${record.merchantName}, Amount: ৳${record.salesAmount}`
         );
+        console.log(`[Perf] create sales record (POST): total ${tFlushed - tStart}ms (lock: ${tLocked - tStart}ms, check: ${tChecked - tLocked}ms, append: ${tFlushed - tChecked}ms)`);
         return jsonResponse({ success: true, id: record.id });
       } finally {
         lock.releaseLock();

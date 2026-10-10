@@ -325,6 +325,7 @@ function makeJsonpRequest(action, payload = {}) {
       url.searchParams.set(key, typeof val === 'object' ? JSON.stringify(val) : String(val));
     });
 
+    const startMs = performance.now();
     const timeout = window.setTimeout(() => {
       cleanup();
       reject(
@@ -343,6 +344,8 @@ function makeJsonpRequest(action, payload = {}) {
 
     window[callbackName] = response => {
       cleanup();
+      const elapsed = (performance.now() - startMs).toFixed(0);
+      console.log(`[Perf] JSONP '${action}' completed in ${elapsed}ms`);
       if (response && response.success) {
         resolve(response);
       } else {

@@ -227,16 +227,25 @@ export default function App() {
     showToast('Logged in successfully!');
   };
 
-  // Generic operation runner with active operation deduplication
-  const executeOperation = useCallback(async (opKey, operation, successMsg, errorPrefix) => {
+  // Generic operation runner with active operation deduplication and non-blocking background sync
+  const executeOperation = useCallback(async (opKey, operation, successMsg, errorPrefix, onImmediateSuccess) => {
     if (pendingOperationsRef.current.has(opKey)) return false;
     pendingOperationsRef.current.add(opKey);
     setIsSyncing(true);
+    const startMs = performance.now();
     try {
       const resp = await operation();
+      const elapsed = (performance.now() - startMs).toFixed(0);
+      console.log(`[Perf] ${opKey} API response received in ${elapsed}ms`);
       if (resp && resp.success !== false) {
         if (successMsg) showToast(successMsg);
-        await fetchData({ forceRefresh: true });
+        if (typeof onImmediateSuccess === 'function') {
+          onImmediateSuccess(resp);
+        }
+        // Non-blocking background sync ensures full database truth without delaying form closure
+        fetchData({ forceRefresh: true }).catch(err => {
+          console.warn('[Sync] Background sync warning:', err);
+        });
         return true;
       }
       return false;
@@ -252,16 +261,44 @@ export default function App() {
   // Transaction Operations (CRUD)
   const handleAddRecord = async record => {
     const opKey = record?.id ? `record_create_${record.id}` : 'record_create';
-    return await executeOperation(opKey, () => api.createRecord(record), 'Sales record logged successfully!', 'Creation Failed');
+    return await executeOperation(
+      opKey,
+      () => api.createRecord(record),
+      'Sales record logged successfully!',
+      'Creation Failed',
+      () => {
+        setRecords(prev => {
+          const list = prev || [];
+          if (list.some(r => r.id === record.id)) return list;
+          return [record, ...list];
+        });
+      }
+    );
   };
 
   const handleUpdateRecord = async record => {
-    return await executeOperation(`record_update_${record.id}`, () => api.updateRecord(record), 'Sales record updated!', 'Update Failed');
+    return await executeOperation(
+      `record_update_${record.id}`,
+      () => api.updateRecord(record),
+      'Sales record updated!',
+      'Update Failed',
+      () => {
+        setRecords(prev => (prev || []).map(r => r.id === record.id ? record : r));
+      }
+    );
   };
 
   const handleDeleteRecord = async id => {
     if (!id) return false;
-    return await executeOperation(`record_delete_${id}`, () => api.deleteRecord(id), 'Record deleted successfully.', 'Deletion Failed');
+    return await executeOperation(
+      `record_delete_${id}`,
+      () => api.deleteRecord(id),
+      'Record deleted successfully.',
+      'Deletion Failed',
+      () => {
+        setRecords(prev => (prev || []).filter(r => r.id !== id));
+      }
+    );
   };
 
   const handleDeleteAllRecords = async () => {
@@ -269,7 +306,10 @@ export default function App() {
       'records_delete_all',
       () => api.deleteAllRecords(),
       'All sales records deleted.',
-      'Deletion Failed'
+      'Deletion Failed',
+      () => {
+        setRecords([]);
+      }
     );
   };
 
@@ -288,63 +328,167 @@ export default function App() {
   // Payment Operations (CRUD)
   const handleAddPayment = async payment => {
     const opKey = payment?.id ? `payment_create_${payment.id}` : 'payment_create';
-    return await executeOperation(opKey, () => api.createPayment(payment), 'Merchant payout recorded!', 'Payout Logging Failed');
+    return await executeOperation(
+      opKey,
+      () => api.createPayment(payment),
+      'Merchant payout recorded!',
+      'Payout Logging Failed',
+      () => {
+        setPayments(prev => {
+          const list = prev || [];
+          if (list.some(p => p.id === payment.id)) return list;
+          return [payment, ...list];
+        });
+      }
+    );
   };
 
   const handleUpdatePayment = async payment => {
-    return await executeOperation(`payment_update_${payment.id}`, () => api.updatePayment(payment), 'Payout log updated!', 'Payout Update Failed');
+    return await executeOperation(
+      `payment_update_${payment.id}`,
+      () => api.updatePayment(payment),
+      'Payout log updated!',
+      'Payout Update Failed',
+      () => {
+        setPayments(prev => (prev || []).map(p => p.id === payment.id ? payment : p));
+      }
+    );
   };
 
   const handleDeletePayment = async id => {
     if (!id) return false;
-    return await executeOperation(`payment_delete_${id}`, () => api.deletePayment(id), 'Payout log removed.', 'Payout Deletion Failed');
+    return await executeOperation(
+      `payment_delete_${id}`,
+      () => api.deletePayment(id),
+      'Payout log removed.',
+      'Payout Deletion Failed',
+      () => {
+        setPayments(prev => (prev || []).filter(p => p.id !== id));
+      }
+    );
   };
 
   // Balance Transfer Operations
   const handleAddTransfer = async transfer => {
     const opKey = transfer?.id ? `transfer_create_${transfer.id}` : 'transfer_create';
-    return await executeOperation(opKey, () => api.createTransfer(transfer), 'Transfer recorded successfully!', 'Transfer Failed');
+    return await executeOperation(
+      opKey,
+      () => api.createTransfer(transfer),
+      'Transfer recorded successfully!',
+      'Transfer Failed',
+      () => {
+        setTransfers(prev => {
+          const list = prev || [];
+          if (list.some(t => t.id === transfer.id)) return list;
+          return [transfer, ...list];
+        });
+      }
+    );
   };
 
   const handleDeleteTransfer = async id => {
     if (!id) return false;
-    return await executeOperation(`transfer_delete_${id}`, () => api.deleteTransfer(id), 'Transfer record removed.', 'Transfer Deletion Failed');
+    return await executeOperation(
+      `transfer_delete_${id}`,
+      () => api.deleteTransfer(id),
+      'Transfer record removed.',
+      'Transfer Deletion Failed',
+      () => {
+        setTransfers(prev => (prev || []).filter(t => t.id !== id));
+      }
+    );
   };
 
   // Receivable Operations (CRUD)
   const handleAddReceivable = async receivable => {
     const opKey = receivable?.id ? `receivable_create_${receivable.id}` : 'receivable_create';
-    return await executeOperation(opKey, () => api.createReceivable(receivable), 'Receivable record logged successfully!', 'Creation Failed');
+    return await executeOperation(
+      opKey,
+      () => api.createReceivable(receivable),
+      'Receivable record logged successfully!',
+      'Creation Failed',
+      () => {
+        setReceivables(prev => {
+          const list = prev || [];
+          if (list.some(r => r.id === receivable.id)) return list;
+          return [receivable, ...list];
+        });
+      }
+    );
   };
 
   const handleUpdateReceivable = async receivable => {
     const successMsg = receivable.status === 'Received'
       ? 'Payment received and deposited to cash balance!'
       : 'Receivable record updated!';
-    return await executeOperation(`receivable_update_${receivable.id}`, () => api.updateReceivable(receivable), successMsg, 'Update Failed');
+    return await executeOperation(
+      `receivable_update_${receivable.id}`,
+      () => api.updateReceivable(receivable),
+      successMsg,
+      'Update Failed',
+      () => {
+        setReceivables(prev => (prev || []).map(r => r.id === receivable.id ? receivable : r));
+      }
+    );
   };
 
   const handleDeleteReceivable = async id => {
     if (!id) return false;
-    return await executeOperation(`receivable_delete_${id}`, () => api.deleteReceivable(id), 'Receivable record removed.', 'Deletion Failed');
+    return await executeOperation(
+      `receivable_delete_${id}`,
+      () => api.deleteReceivable(id),
+      'Receivable record removed.',
+      'Deletion Failed',
+      () => {
+        setReceivables(prev => (prev || []).filter(r => r.id !== id));
+      }
+    );
   };
 
   // Payable Operations (CRUD)
   const handleAddPayable = async payable => {
     const opKey = payable?.id ? `payable_create_${payable.id}` : 'payable_create';
-    return await executeOperation(opKey, () => api.createPayable(payable), 'Payable record logged successfully!', 'Creation Failed');
+    return await executeOperation(
+      opKey,
+      () => api.createPayable(payable),
+      'Payable record logged successfully!',
+      'Creation Failed',
+      () => {
+        setPayables(prev => {
+          const list = prev || [];
+          if (list.some(p => p.id === payable.id)) return list;
+          return [payable, ...list];
+        });
+      }
+    );
   };
 
   const handleUpdatePayable = async payable => {
     const successMsg = payable.status === 'Paid'
       ? 'Payment recorded! Deducted from cash balance.'
       : 'Payable record updated!';
-    return await executeOperation(`payable_update_${payable.id}`, () => api.updatePayable(payable), successMsg, 'Update Failed');
+    return await executeOperation(
+      `payable_update_${payable.id}`,
+      () => api.updatePayable(payable),
+      successMsg,
+      'Update Failed',
+      () => {
+        setPayables(prev => (prev || []).map(p => p.id === payable.id ? payable : p));
+      }
+    );
   };
 
   const handleDeletePayable = async id => {
     if (!id) return false;
-    return await executeOperation(`payable_delete_${id}`, () => api.deletePayable(id), 'Payable record removed.', 'Deletion Failed');
+    return await executeOperation(
+      `payable_delete_${id}`,
+      () => api.deletePayable(id),
+      'Payable record removed.',
+      'Deletion Failed',
+      () => {
+        setPayables(prev => (prev || []).filter(p => p.id !== id));
+      }
+    );
   };
 
   // Opening Balance Operations (one record per calendar month)
@@ -373,16 +517,44 @@ export default function App() {
   // Other Cash Records Operations (CRUD)
   const handleAddOtherCashRecord = async record => {
     const opKey = record?.id ? `other_cash_create_${record.id}` : 'other_cash_create';
-    return await executeOperation(opKey, () => api.createOtherCashRecord(record), 'Other cash record created successfully!', 'Creation Failed');
+    return await executeOperation(
+      opKey,
+      () => api.createOtherCashRecord(record),
+      'Other cash record created successfully!',
+      'Creation Failed',
+      () => {
+        setOtherCashRecords(prev => {
+          const list = prev || [];
+          if (list.some(r => r.id === record.id)) return list;
+          return [record, ...list];
+        });
+      }
+    );
   };
 
   const handleUpdateOtherCashRecord = async record => {
-    return await executeOperation(`other_cash_update_${record.id}`, () => api.updateOtherCashRecord(record), 'Other cash record updated!', 'Update Failed');
+    return await executeOperation(
+      `other_cash_update_${record.id}`,
+      () => api.updateOtherCashRecord(record),
+      'Other cash record updated!',
+      'Update Failed',
+      () => {
+        setOtherCashRecords(prev => (prev || []).map(r => r.id === record.id ? record : r));
+      }
+    );
   };
 
   const handleDeleteOtherCashRecord = async id => {
     if (!id) return false;
-    return await executeOperation(`other_cash_delete_${id}`, () => api.deleteOtherCashRecord(id), 'Other cash record removed.', 'Deletion Failed');
+    return await executeOperation(
+      `other_cash_delete_${id}`,
+      () => api.deleteOtherCashRecord(id),
+      'Other cash record removed.',
+      'Deletion Failed',
+      () => {
+        setOtherCashRecords(prev => (prev || []).filter(r => r.id !== id));
+      }
+    );
   };
 
   // Authentication gate

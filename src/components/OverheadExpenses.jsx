@@ -30,7 +30,7 @@ const OverheadExpenses = ({ form, handleChange }) => {
           />
         </div>
         <div className="space-y-1">
-          <label className="text-[11px] font-medium text-slate-400">Rider Wages (৳)</label>
+          <label className="text-[11px] font-medium text-slate-400">Rider Salary (৳)</label>
           <input
             type="number"
             name="riderSalary"

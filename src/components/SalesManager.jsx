@@ -1,10 +1,10 @@
+import { format } from 'date-fns';
 import { Calendar, Edit2, Plus, Search, SlidersHorizontal, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import DatePicker from 'react-datepicker';
-import { format } from 'date-fns';
 import { toast } from 'react-toastify';
-import { sortRecordsByDateDesc } from '../utils/dates';
 import { generateUniqueId } from '../utils/api';
+import { sortRecordsByDateDesc } from '../utils/dates';
 
 const MONTHS = [
   'January',
@@ -29,19 +29,7 @@ const normalizePayment = value =>
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
 
-const ONLINE_KEYWORDS = [
-  'bkash',
-  'nagad',
-  'rocket',
-  'upay',
-  'sslcommerz',
-  'card',
-  'card payment',
-  'bank transfer',
-  'internet banking',
-  'mobile banking',
-  'online',
-];
+const ONLINE_KEYWORDS = ['bkash', 'nagad', 'rocket', 'online'];
 
 const CASH_KEYWORDS = ['cash', 'cash on delivery', 'cod'];
 
@@ -56,7 +44,7 @@ const getPaymentBucket = value => {
 };
 
 const defaultForm = {
-  date: new Date().toISOString().slice(0, 16),
+  date: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
   month: MONTHS[new Date().getMonth()],
   merchantName: '',
   salesAmount: '',
@@ -255,10 +243,7 @@ export default function SalesManager({
       const idKey = r.id !== undefined && r.id !== null ? String(r.id).trim() : '';
       if (idKey && seen.has(idKey)) continue;
       if (idKey) seen.add(idKey);
-      if (
-        (parseFloat(r.salesAmount) || 0) > 0 ||
-        (parseFloat(r.deliveryCharge) || 0) > 0
-      ) {
+      if ((parseFloat(r.salesAmount) || 0) > 0 || (parseFloat(r.deliveryCharge) || 0) > 0) {
         unique.push(r);
       }
     }
@@ -420,7 +405,8 @@ export default function SalesManager({
                   const isRecTransfer =
                     r.salesType === 'Hand Cash to Online Transfer' ||
                     r.salesType === 'Online to Hand Cash Transfer';
-                  const isCash = !r.digitalPaymentMethod || r.digitalPaymentMethod.toLowerCase() === 'cash';
+                  const isCash =
+                    !r.digitalPaymentMethod || r.digitalPaymentMethod.toLowerCase() === 'cash';
                   return (
                     <tr key={r.id} className="text-slate-300">
                       <td className="font-medium text-slate-400">
@@ -486,9 +472,7 @@ export default function SalesManager({
                         ) : isCash ? (
                           <span className="badge-pill badge-emerald">Cash</span>
                         ) : (
-                          <span className="badge-pill badge-indigo">
-                            {r.digitalPaymentMethod}
-                          </span>
+                          <span className="badge-pill badge-indigo">{r.digitalPaymentMethod}</span>
                         )}
                       </td>
                       <td className="font-bold text-slate-100">
@@ -560,23 +544,31 @@ export default function SalesManager({
             <form
               id="sales-record-form"
               onSubmit={handleSubmit}
-              className="flex-1 overflow-y-auto p-6 space-y-6"
+              className="flex-1 overflow-y-auto p-5 space-y-5"
+              style={{ scrollbarWidth: 'thin', scrollbarColor: '#1e293b transparent' }}
             >
-              {/* DATE & MERCHANT SECTION */}
-              <div className="space-y-4">
-                <h3 className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest border-b border-slate-900 pb-1.5">
-                  1. Date &amp; Merchant details
-                </h3>
+              {/* ── SECTION 1: Date & Merchant ── */}
+              <div className="rounded-2xl border border-indigo-500/10 bg-gradient-to-br from-slate-900/80 to-slate-950/90 p-4 space-y-4 shadow-lg shadow-indigo-950/10">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] font-bold">
+                    1
+                  </span>
+                  <h3 className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">
+                    Date &amp; Merchant
+                  </h3>
+                </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-medium text-slate-400">Date</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="group">
+                    <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-1.5 group-focus-within:text-indigo-400 transition-colors">
+                      Date &amp; Time
+                    </label>
                     <DatePicker
                       selected={form.date ? new Date(form.date) : null}
-                      onChange={(date) => {
+                      onChange={date => {
                         if (date) {
                           handleChange({
-                            target: { name: 'date', value: format(date, "yyyy-MM-dd'T'HH:mm") }
+                            target: { name: 'date', value: format(date, "yyyy-MM-dd'T'HH:mm") },
                           });
                         }
                       }}
@@ -584,21 +576,21 @@ export default function SalesManager({
                       timeFormat="HH:mm"
                       timeIntervals={15}
                       timeCaption="Time"
-                      dateFormat="MMMM d, yyyy h:mm aa"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                      dateFormat="MMM d, yyyy h:mm aa"
+                      className="w-full bg-slate-950/70 border border-slate-700/60 hover:border-slate-600 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 rounded-xl px-3 py-2.5 text-xs text-white outline-none transition-all duration-200"
                       wrapperClassName="w-full"
                     />
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-medium text-slate-400">
-                      Active Cycle Month
+                  <div className="group">
+                    <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-1.5 group-focus-within:text-indigo-400 transition-colors">
+                      Cycle Month
                     </label>
                     <select
                       name="month"
                       value={form.month}
                       onChange={handleChange}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                      className="w-full bg-slate-950/70 border border-slate-700/60 hover:border-slate-600 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 rounded-xl px-3 py-2.5 text-xs text-white outline-none transition-all duration-200 cursor-pointer"
                     >
                       {MONTHS.map(m => (
                         <option key={m} value={m}>
@@ -609,8 +601,8 @@ export default function SalesManager({
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-medium text-slate-400 block">
+                <div className="group">
+                  <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-1.5 group-focus-within:text-indigo-400 transition-colors">
                     Merchant Name
                   </label>
                   <div className="flex gap-2">
@@ -618,9 +610,9 @@ export default function SalesManager({
                       name="merchantName"
                       value={form.merchantName}
                       onChange={handleChange}
-                      className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                      className="flex-1 bg-slate-950/70 border border-slate-700/60 hover:border-slate-600 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 rounded-xl px-3 py-2.5 text-xs text-white outline-none transition-all duration-200 cursor-pointer"
                     >
-                      <option value="">Select a merchant</option>
+                      <option value="">Select a merchant…</option>
                       {merchants.map(m => (
                         <option key={m} value={m}>
                           {m}
@@ -630,25 +622,25 @@ export default function SalesManager({
                     <button
                       type="button"
                       onClick={() => setShowAddMerchant(!showAddMerchant)}
-                      className="px-3.5 rounded-xl border border-slate-800 hover:border-slate-700 bg-slate-950 text-slate-300 text-sm cursor-pointer"
+                      title="Add new merchant"
+                      className="w-10 h-10 flex items-center justify-center rounded-xl border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 hover:text-indigo-300 text-lg font-bold transition-all cursor-pointer"
                     >
                       +
                     </button>
                   </div>
-
                   {showAddMerchant && (
-                    <div className="flex gap-2 p-3 bg-slate-950/60 border border-slate-900 rounded-xl mt-2">
+                    <div className="flex gap-2 mt-2 p-3 bg-indigo-950/30 border border-indigo-500/20 rounded-xl">
                       <input
                         type="text"
-                        placeholder="Enter merchant title..."
+                        placeholder="New merchant name…"
                         value={newMerchant}
                         onChange={e => setNewMerchant(e.target.value)}
-                        className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-indigo-500"
+                        className="flex-1 bg-slate-950/80 border border-slate-700/60 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 rounded-xl px-3 py-2 text-xs text-white outline-none transition-all"
                       />
                       <button
                         type="button"
                         onClick={handleAddNewMerchant}
-                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold cursor-pointer"
+                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-lg shadow-indigo-600/20"
                       >
                         Add
                       </button>
@@ -657,34 +649,46 @@ export default function SalesManager({
                 </div>
               </div>
 
-              {/* SALES METRICS SECTION */}
-              <div className="space-y-4">
-                <h3 className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest border-b border-slate-900 pb-1.5">
-                  2. Sales Transaction core
-                </h3>
+              {/* ── SECTION 2: Sales Core ── */}
+              <div className="rounded-2xl border border-violet-500/10 bg-gradient-to-br from-slate-900/80 to-slate-950/90 p-4 space-y-4 shadow-lg shadow-violet-950/10">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="flex items-center justify-center w-5 h-5 rounded-full bg-violet-500/20 text-violet-300 text-[10px] font-bold">
+                    2
+                  </span>
+                  <h3 className="text-[10px] font-bold text-violet-400 uppercase tracking-widest">
+                    Sales Transaction Core
+                  </h3>
+                </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-medium text-slate-400">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="group">
+                    <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-1.5 group-focus-within:text-violet-400 transition-colors">
                       Sales Amount (৳)
                     </label>
-                    <input
-                      type="number"
-                      name="salesAmount"
-                      value={form.salesAmount}
-                      onChange={handleChange}
-                      placeholder="e.g. 5000"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
-                    />
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm font-bold pointer-events-none">
+                        ৳
+                      </span>
+                      <input
+                        type="number"
+                        name="salesAmount"
+                        value={form.salesAmount}
+                        onChange={handleChange}
+                        placeholder="0.00"
+                        className="w-full bg-slate-950/70 border border-slate-700/60 hover:border-slate-600 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 rounded-xl pl-7 pr-3 py-2.5 text-xs text-white outline-none transition-all duration-200 font-mono"
+                      />
+                    </div>
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-medium text-slate-400">Sales Type</label>
+                  <div className="group">
+                    <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-1.5 group-focus-within:text-violet-400 transition-colors">
+                      Sales Type
+                    </label>
                     <select
                       name="salesType"
                       value={form.salesType}
                       onChange={handleChange}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                      className="w-full bg-slate-950/70 border border-slate-700/60 hover:border-slate-600 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 rounded-xl px-3 py-2.5 text-xs text-white outline-none transition-all duration-200 cursor-pointer"
                     >
                       {SALES_TYPES.map(t => (
                         <option key={t} value={t}>
@@ -696,13 +700,15 @@ export default function SalesManager({
                 </div>
 
                 <div className="grid grid-cols-3 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-medium text-slate-400">Com. Percent</label>
+                  <div className="group">
+                    <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-1.5 group-focus-within:text-violet-400 transition-colors">
+                      Com. %
+                    </label>
                     <select
                       name="commissionPercent"
                       value={form.commissionPercent}
                       onChange={handleChange}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none"
+                      className="w-full bg-slate-950/70 border border-slate-700/60 hover:border-slate-600 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 rounded-xl px-3 py-2.5 text-xs text-white outline-none transition-all duration-200 cursor-pointer"
                     >
                       <option value="15">15%</option>
                       <option value="10">10%</option>
@@ -711,73 +717,115 @@ export default function SalesManager({
                     </select>
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-medium text-slate-400">Com. Amount</label>
-                    <input
-                      type="text"
-                      readOnly
-                      value={`৳${form.commissionAmount}`}
-                      className="w-full bg-slate-900 border border-slate-800 text-slate-400 rounded-xl px-3 py-2 text-xs select-none cursor-not-allowed"
-                    />
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-600 uppercase tracking-widest mb-1.5">
+                      Com. Amount
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        readOnly
+                        value={`৳${form.commissionAmount}`}
+                        className="w-full bg-slate-900/60 border border-slate-800/80 text-slate-500 rounded-xl px-3 py-2.5 text-xs font-mono select-none cursor-not-allowed"
+                      />
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[8px] text-slate-700 font-bold tracking-wider">
+                        AUTO
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-medium text-slate-400">Merchant Bill</label>
-                    <input
-                      type="text"
-                      readOnly
-                      value={`৳${form.merchantBill}`}
-                      className="w-full bg-slate-900 border border-slate-800 text-slate-400 rounded-xl px-3 py-2 text-xs select-none cursor-not-allowed"
-                      title="Sales - Commission"
-                    />
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-600 uppercase tracking-widest mb-1.5">
+                      Merchant Bill
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        readOnly
+                        value={`৳${form.merchantBill}`}
+                        className="w-full bg-slate-900/60 border border-slate-800/80 text-slate-500 rounded-xl px-3 py-2.5 text-xs font-mono select-none cursor-not-allowed"
+                        title="Sales - Commission"
+                      />
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[8px] text-slate-700 font-bold tracking-wider">
+                        AUTO
+                      </span>
+                    </div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-3 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-medium text-slate-400">Discount Pct</label>
+                  <div className="group">
+                    <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-1.5 group-focus-within:text-violet-400 transition-colors">
+                      Disc. %
+                    </label>
                     <input
                       type="number"
                       name="discountPercent"
                       value={form.discountPercent}
                       onChange={handleChange}
-                      placeholder="e.g. 5"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none"
+                      placeholder="0"
+                      className="w-full bg-slate-950/70 border border-slate-700/60 hover:border-slate-600 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 rounded-xl px-3 py-2.5 text-xs text-white outline-none transition-all duration-200 font-mono"
                     />
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-medium text-slate-400">Discount Amt</label>
-                    <input
-                      type="text"
-                      readOnly
-                      value={`৳${form.discountAmount}`}
-                      className="w-full bg-slate-900 border border-slate-800 text-slate-400 rounded-xl px-3 py-2 text-xs select-none cursor-not-allowed"
-                    />
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-600 uppercase tracking-widest mb-1.5">
+                      Disc. Amount
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        readOnly
+                        value={`৳${form.discountAmount}`}
+                        className="w-full bg-slate-900/60 border border-slate-800/80 text-slate-500 rounded-xl px-3 py-2.5 text-xs font-mono select-none cursor-not-allowed"
+                      />
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[8px] text-slate-700 font-bold tracking-wider">
+                        AUTO
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-medium text-slate-400">Delivery Fee</label>
-                    <input
-                      type="number"
-                      name="deliveryCharge"
-                      value={form.deliveryCharge}
-                      onChange={handleChange}
-                      placeholder="e.g. 150"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none"
-                    />
+                  <div className="group">
+                    <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-1.5 group-focus-within:text-violet-400 transition-colors">
+                      Delivery Fee
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm font-bold pointer-events-none">
+                        ৳
+                      </span>
+                      <input
+                        type="number"
+                        name="deliveryCharge"
+                        value={form.deliveryCharge}
+                        onChange={handleChange}
+                        placeholder="0"
+                        className="w-full bg-slate-950/70 border border-slate-700/60 hover:border-slate-600 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 rounded-xl pl-7 pr-3 py-2.5 text-xs text-white outline-none transition-all duration-200 font-mono"
+                      />
+                    </div>
                   </div>
                 </div>
+              </div>
 
-                <div className="space-y-1">
-                  <label className="text-[11px] font-medium text-slate-400">
+              {/* ── SECTION 3: Payment ── */}
+              <div className="rounded-2xl border border-emerald-500/10 bg-gradient-to-br from-slate-900/80 to-slate-950/90 p-4 space-y-4 shadow-lg shadow-emerald-950/10">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold">
+                    3
+                  </span>
+                  <h3 className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">
+                    Payment Method
+                  </h3>
+                </div>
+
+                <div className="group">
+                  <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-1.5 group-focus-within:text-emerald-400 transition-colors">
                     Customer Payment Method
                   </label>
                   <select
                     name="digitalPaymentMethod"
                     value={form.digitalPaymentMethod}
                     onChange={handleChange}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                    className="w-full bg-slate-950/70 border border-slate-700/60 hover:border-slate-600 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-xl px-3 py-2.5 text-xs text-white outline-none transition-all duration-200 cursor-pointer"
                   >
                     <option value="">Cash / Physical Collection</option>
                     <optgroup label="── Online Payment Methods ──">
@@ -785,38 +833,25 @@ export default function SalesManager({
                       <option value="bkash">bKash</option>
                       <option value="nagad">Nagad</option>
                       <option value="rocket">Rocket</option>
-                      <option value="upay">Upay</option>
-                      <option value="card payment">Card Payment</option>
-                      <option value="bank transfer">Bank Transfer</option>
-                      <option value="internet banking">Internet Banking</option>
-                      <option value="sslcommerz">SSLCommerz</option>
                     </optgroup>
                   </select>
                 </div>
 
-                {/* Show Order Funded By only when Online Payment is selected (except for generic 'online' which has no deduction) */}
-                {[
-                  'bkash',
-                  'nagad',
-                  'rocket',
-                  'upay',
-                  'card payment',
-                  'bank transfer',
-                  'internet banking',
-                  'sslcommerz',
-                ].includes(String(form.digitalPaymentMethod || '').toLowerCase()) && (
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-medium text-slate-400">
+                {['bkash', 'nagad', 'rocket'].includes(
+                  String(form.digitalPaymentMethod || '').toLowerCase()
+                ) && (
+                  <div className="group">
+                    <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-1.5 group-focus-within:text-emerald-400 transition-colors">
                       Order Funded By
-                      <span className="ml-1 text-slate-500 normal-case font-normal">
-                        (where was the product purchase money spent from?)
+                      <span className="ml-1.5 text-slate-600 normal-case font-normal text-[9px]">
+                        (where was the purchase money from?)
                       </span>
                     </label>
                     <select
                       name="paymentSource"
                       value={form.paymentSource || 'cash'}
                       onChange={handleChange}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                      className="w-full bg-slate-950/70 border border-slate-700/60 hover:border-slate-600 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-xl px-3 py-2.5 text-xs text-white outline-none transition-all duration-200 cursor-pointer"
                     >
                       <option value="cash">Hand Cash (order bought using physical cash)</option>
                       <option value="online">
@@ -827,73 +862,68 @@ export default function SalesManager({
                   </div>
                 )}
 
-                {/* Live accounting effect badge */}
+                {/* Live accounting effect badges */}
                 {form.digitalPaymentMethod &&
                   (() => {
                     const method = String(form.digitalPaymentMethod || '').toLowerCase();
-                    const isOnlineMethod = [
-                      'bkash',
-                      'nagad',
-                      'rocket',
-                      'upay',
-                      'card payment',
-                      'bank transfer',
-                      'internet banking',
-                      'sslcommerz',
-                      'online',
-                    ].includes(method);
+                    const isOnlineMethod = ['bkash', 'nagad', 'rocket'].includes(method);
                     const source = form.paymentSource || 'cash';
-
-                    if (method === 'online') {
+                    if (method === 'online')
                       return (
-                        <div className="mt-1 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                        <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
                           Online Balance INCREASES by ৳{form.paidByCustomer || 0} (No purchase cost
                           deduction)
                         </div>
                       );
-                    }
-
-                    if (isOnlineMethod && source === 'cash') {
+                    if (isOnlineMethod && source === 'cash')
                       return (
-                        <div className="mt-1 flex flex-col gap-1">
-                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-rose-500/10 text-rose-400 border border-rose-500/20">
-                            <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />
                             Hand Cash DECREASES by ৳{form.salesAmount || 0} (purchase cost)
                           </div>
-                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                          <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
                             Online Balance INCREASES by ৳{form.paidByCustomer || 0} (customer paid)
                           </div>
                         </div>
                       );
-                    }
-                    if (isOnlineMethod && source === 'online') {
+                    if (isOnlineMethod && source === 'online')
                       return (
-                        <div className="mt-1 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                        <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
                           Online Balance: ৳{form.paidByCustomer || 0} added, ৳
                           {form.salesAmount || 0} deducted
                         </div>
                       );
-                    }
                     return (
-                      <div className="mt-1 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                         Hand Cash: ৳{form.paidByCustomer || 0} added, ৳{form.salesAmount || 0}{' '}
                         deducted
                       </div>
                     );
                   })()}
 
-                <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between mt-4">
-                  <span className="text-xs font-semibold text-slate-400 flex items-center gap-1">
-                    Customer Grand Total:
-                    <span className="text-[10px] text-slate-600 block">
-                      (Sales + Delivery - Discount)
-                    </span>
+                {/* Grand Total Card */}
+                <div className="relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-r from-emerald-950/50 to-slate-950/80 p-4 flex items-center justify-between shadow-lg">
+                  <div
+                    className="absolute inset-0 opacity-5"
+                    style={{
+                      backgroundImage:
+                        'radial-gradient(circle at 20% 50%, #10b981 0%, transparent 60%)',
+                    }}
+                  />
+                  <div className="relative">
+                    <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">
+                      Customer Grand Total
+                    </p>
+                    <p className="text-[9px] text-slate-600 mt-0.5">Sales + Delivery − Discount</p>
+                  </div>
+                  <span className="relative text-xl font-black text-emerald-400 tabular-nums tracking-tight">
+                    ৳{form.paidByCustomer}
                   </span>
-                  <span className="text-sm font-bold text-emerald-400">৳{form.paidByCustomer}</span>
                 </div>
               </div>
             </form>

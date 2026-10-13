@@ -18,8 +18,8 @@ import {
   X,
 } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
-import { formatDisplayDate, sortRecordsByDateDesc, toDateKey } from '../utils/dates';
 import { generateUniqueId } from '../utils/api';
+import { formatDisplayDate, sortRecordsByDateDesc, toDateKey } from '../utils/dates';
 
 const ACCOUNT_LABELS = {
   cash: {
@@ -81,7 +81,6 @@ export default function ReceivableManager({
   const isSubmittingRef = useRef(false);
 
   // ─── Payable State ─────────────────────────────────────────────────────────
-  // payable সার্চ এবং ফিল্টারের জন্য আলাদা state রাখা হয়েছে
   const [paySearchQuery, setPaySearchQuery] = useState('');
   const [payStatusFilter, setPayStatusFilter] = useState('all'); // 'all', 'unpaid', 'paid'
   const [payAccountFilter, setPayAccountFilter] = useState('all');
@@ -160,7 +159,6 @@ export default function ReceivableManager({
   }, [receivables]);
 
   // ─── Payable Metric Computations ──────────────────────────────────────────
-  // payables array থেকে মোট দেনা, paid এবং unpaid পরিমাণ হিসাব করা হচ্ছে
   const payStats = useMemo(() => {
     let total = 0;
     let paid = 0;
@@ -181,7 +179,9 @@ export default function ReceivableManager({
         paid += amt;
         paidCount += 1;
         // কোন account থেকে pay করা হয়েছে সেই অনুযায়ী ভাগ করা হচ্ছে
-        const acc = String(p.paidAccount || 'cash').toLowerCase().trim();
+        const acc = String(p.paidAccount || 'cash')
+          .toLowerCase()
+          .trim();
         if (acc === 'other_cash' || acc === 'other cash') {
           paidInOtherCash += amt;
         } else if (acc === 'online') {
@@ -196,72 +196,85 @@ export default function ReceivableManager({
       }
     });
 
-    return { total, paid, unpaid, unpaidCount, paidCount, paidInCash, paidInOnline, paidInOtherCash };
+    return {
+      total,
+      paid,
+      unpaid,
+      unpaidCount,
+      paidCount,
+      paidInCash,
+      paidInOnline,
+      paidInOtherCash,
+    };
   }, [payables]);
 
   // Filtered List
   const filteredRecords = useMemo(() => {
     return sortRecordsByDateDesc(
-      receivables
-        .filter(r => {
-          // Status filter
-          if (statusFilter === 'pending' && r.status === 'Received') return false;
-          if (statusFilter === 'received' && r.status !== 'Received') return false;
+      receivables.filter(r => {
+        // Status filter
+        if (statusFilter === 'pending' && r.status === 'Received') return false;
+        if (statusFilter === 'received' && r.status !== 'Received') return false;
 
-          // Account filter (applies to received)
-          if (accountFilter !== 'all') {
-            if (r.status !== 'Received') return false;
-            const acc = String(r.receivedAccount || 'cash')
-              .toLowerCase()
-              .trim();
-            if (acc !== accountFilter) return false;
-          }
+        // Account filter (applies to received)
+        if (accountFilter !== 'all') {
+          if (r.status !== 'Received') return false;
+          const acc = String(r.receivedAccount || 'cash')
+            .toLowerCase()
+            .trim();
+          if (acc !== accountFilter) return false;
+        }
 
-          // Search query
-          if (searchQuery.trim()) {
-            const q = searchQuery.toLowerCase().trim();
-            const nameMatch = String(r.name || '')
-              .toLowerCase()
-              .includes(q);
-            const noteMatch = String(r.note || '')
-              .toLowerCase()
-              .includes(q);
-            const amtMatch = String(r.amount || '').includes(q);
-            if (!nameMatch && !noteMatch && !amtMatch) return false;
-          }
+        // Search query
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase().trim();
+          const nameMatch = String(r.name || '')
+            .toLowerCase()
+            .includes(q);
+          const noteMatch = String(r.note || '')
+            .toLowerCase()
+            .includes(q);
+          const amtMatch = String(r.amount || '').includes(q);
+          if (!nameMatch && !noteMatch && !amtMatch) return false;
+        }
 
-          return true;
-        })
+        return true;
+      })
     );
   }, [receivables, statusFilter, accountFilter, searchQuery]);
 
   // Payable filtered list — payables filter এবং sort করা হচ্ছে
   const filteredPayables = useMemo(() => {
     return sortRecordsByDateDesc(
-      payables
-        .filter(p => {
-          // Status filter: unpaid শুধু দেখাবে, paid শুধু দেখাবে, অথবা all
-          if (payStatusFilter === 'unpaid' && p.status === 'Paid') return false;
-          if (payStatusFilter === 'paid' && p.status !== 'Paid') return false;
+      payables.filter(p => {
+        // Status filter: unpaid শুধু দেখাবে, paid শুধু দেখাবে, অথবা all
+        if (payStatusFilter === 'unpaid' && p.status === 'Paid') return false;
+        if (payStatusFilter === 'paid' && p.status !== 'Paid') return false;
 
-          // Account filter: শুধু paid records-এ apply হবে
-          if (payAccountFilter !== 'all') {
-            if (p.status !== 'Paid') return false;
-            const acc = String(p.paidAccount || 'cash').toLowerCase().trim();
-            if (acc !== payAccountFilter) return false;
-          }
+        // Account filter: শুধু paid records-এ apply হবে
+        if (payAccountFilter !== 'all') {
+          if (p.status !== 'Paid') return false;
+          const acc = String(p.paidAccount || 'cash')
+            .toLowerCase()
+            .trim();
+          if (acc !== payAccountFilter) return false;
+        }
 
-          // Search: নাম, নোট বা পরিমাণ দিয়ে খোঁজা যাবে
-          if (paySearchQuery.trim()) {
-            const q = paySearchQuery.toLowerCase().trim();
-            const nameMatch = String(p.name || '').toLowerCase().includes(q);
-            const noteMatch = String(p.note || '').toLowerCase().includes(q);
-            const amtMatch = String(p.amount || '').includes(q);
-            if (!nameMatch && !noteMatch && !amtMatch) return false;
-          }
+        // Search: নাম, নোট বা পরিমাণ দিয়ে খোঁজা যাবে
+        if (paySearchQuery.trim()) {
+          const q = paySearchQuery.toLowerCase().trim();
+          const nameMatch = String(p.name || '')
+            .toLowerCase()
+            .includes(q);
+          const noteMatch = String(p.note || '')
+            .toLowerCase()
+            .includes(q);
+          const amtMatch = String(p.amount || '').includes(q);
+          if (!nameMatch && !noteMatch && !amtMatch) return false;
+        }
 
-          return true;
-        })
+        return true;
+      })
     );
   }, [payables, payStatusFilter, payAccountFilter, paySearchQuery]);
 
@@ -442,7 +455,9 @@ export default function ReceivableManager({
     setPayForm({
       name: payable.name || '',
       amount: payable.amount || '',
-      date: payable.date ? toDateKey(payable.date) || payable.date : new Date().toISOString().slice(0, 10),
+      date: payable.date
+        ? toDateKey(payable.date) || payable.date
+        : new Date().toISOString().slice(0, 10),
       note: payable.note || '',
       status: payable.status || 'Unpaid',
       paidAccount: payable.paidAccount || 'cash',
@@ -478,7 +493,7 @@ export default function ReceivableManager({
           note: payForm.note.trim(),
           status: payForm.status,
           paidAccount: payForm.status === 'Paid' ? payForm.paidAccount : null,
-          paidDate: payForm.status === 'Paid' ? (editingPayable.paidDate || payForm.date) : null,
+          paidDate: payForm.status === 'Paid' ? editingPayable.paidDate || payForm.date : null,
         });
       } else {
         // নতুন record তৈরি করা হচ্ছে
@@ -536,10 +551,10 @@ export default function ReceivableManager({
       // API call: payable record আপডেট করা হচ্ছে, status 'Paid' এবং paidAccount সেট করা হচ্ছে
       // finance.js এর computeNetCashBalance function এই paidAccount দেখে correct cash bucket থেকে deduct করবে
       const success = await onUpdatePayable({
-        ...payingRecord,               // existing সব field রাখা হচ্ছে
-        status: 'Paid',                // status পরিবর্তন করা হচ্ছে Unpaid → Paid
-        paidAccount: payModal.paidAccount,  // কোন account থেকে pay হয়েছে (cash/online/other_cash)
-        paidDate: payModal.paidDate,        // কোন তারিখে pay হয়েছে
+        ...payingRecord, // existing সব field রাখা হচ্ছে
+        status: 'Paid', // status পরিবর্তন করা হচ্ছে Unpaid → Paid
+        paidAccount: payModal.paidAccount, // কোন account থেকে pay হয়েছে (cash/online/other_cash)
+        paidDate: payModal.paidDate, // কোন তারিখে pay হয়েছে
         note: payModal.payNote ? payModal.payNote.trim() : payingRecord.note, // আপডেটেড নোট
       });
       // সফল হলে modal বন্ধ করা হচ্ছে এবং state clear করা হচ্ছে
@@ -565,9 +580,9 @@ export default function ReceivableManager({
     try {
       await onUpdatePayable({
         ...payable,
-        status: 'Unpaid',    // Paid → Unpaid
-        paidAccount: null,   // account info মুছে ফেলা হচ্ছে
-        paidDate: null,      // payment date মুছে ফেলা হচ্ছে
+        status: 'Unpaid', // Paid → Unpaid
+        paidAccount: null, // account info মুছে ফেলা হচ্ছে
+        paidDate: null, // payment date মুছে ফেলা হচ্ছে
       });
     } catch (err) {
       console.error(err);
@@ -598,12 +613,11 @@ export default function ReceivableManager({
             <h1 className="text-xl font-bold tracking-tight text-white">
               Receivables &amp; Payables
             </h1>
-            <span className="badge-pill badge-indigo">
-              Ledger
-            </span>
+            <span className="badge-pill badge-indigo">Ledger</span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Track money you will receive from clients and debts you owe to suppliers with auto cash balance deduction
+            Track money you will receive from clients and debts you owe to suppliers with auto cash
+            balance deduction
           </p>
         </div>
 
@@ -641,7 +655,9 @@ export default function ReceivableManager({
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
           }`}
         >
-          <ArrowDownLeft className={`w-3.5 h-3.5 ${activeTab === 'receivable' ? 'text-emerald-300' : 'text-emerald-400'}`} />
+          <ArrowDownLeft
+            className={`w-3.5 h-3.5 ${activeTab === 'receivable' ? 'text-emerald-300' : 'text-emerald-400'}`}
+          />
           <span>Receivables (Money to Receive)</span>
           {stats.pendingCount > 0 && (
             <span className="badge-pill badge-amber text-[9px] py-0.5 px-1.5 font-bold">
@@ -659,7 +675,9 @@ export default function ReceivableManager({
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
           }`}
         >
-          <Coins className={`w-3.5 h-3.5 ${activeTab === 'payable' ? 'text-rose-200' : 'text-rose-400'}`} />
+          <Coins
+            className={`w-3.5 h-3.5 ${activeTab === 'payable' ? 'text-rose-200' : 'text-rose-400'}`}
+          />
           <span>Payables (Money I Owe)</span>
           {payStats.unpaidCount > 0 && (
             <span className="badge-pill badge-rose text-[9px] py-0.5 px-1.5 font-bold">
@@ -675,7 +693,9 @@ export default function ReceivableManager({
           {/* Payable Header Notice */}
           <div className="flex items-center justify-between">
             <p className="text-xs text-slate-400">
-              Manage suppliers &amp; debts you owe. Clicking <span className="font-semibold text-rose-400">"Pay Now"</span> deducts from cash balance.
+              Manage suppliers &amp; debts you owe. Clicking{' '}
+              <span className="font-semibold text-rose-400">"Pay Now"</span> deducts from cash
+              balance.
             </p>
           </div>
 
@@ -684,7 +704,9 @@ export default function ReceivableManager({
             {/* Unpaid (বকেয়া) */}
             <div className="glass-panel rounded-2xl p-5 border border-rose-500/20 relative overflow-hidden">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Outstanding Debt</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  Outstanding Debt
+                </span>
                 <div className="p-2 rounded-xl bg-rose-500/10 text-rose-400">
                   <Clock className="w-4 h-4" />
                 </div>
@@ -694,7 +716,9 @@ export default function ReceivableManager({
                   ৳{payStats.unpaid.toLocaleString()}
                 </span>
                 <div className="flex items-center gap-1.5 mt-1">
-                  <span className="text-[10px] font-semibold text-rose-400">{payStats.unpaidCount} record{payStats.unpaidCount !== 1 ? 's' : ''}</span>
+                  <span className="text-[10px] font-semibold text-rose-400">
+                    {payStats.unpaidCount} record{payStats.unpaidCount !== 1 ? 's' : ''}
+                  </span>
                   <span className="text-[10px] text-slate-500">pending payment</span>
                 </div>
               </div>
@@ -703,7 +727,9 @@ export default function ReceivableManager({
             {/* Paid (পরিশোধিত) */}
             <div className="glass-panel rounded-2xl p-5 border border-emerald-500/20 relative overflow-hidden">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Paid</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  Total Paid
+                </span>
                 <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
                   <CheckCircle2 className="w-4 h-4" />
                 </div>
@@ -713,7 +739,9 @@ export default function ReceivableManager({
                   ৳{payStats.paid.toLocaleString()}
                 </span>
                 <div className="flex items-center gap-1.5 mt-1">
-                  <span className="text-[10px] font-semibold text-emerald-400">{payStats.paidCount} settled</span>
+                  <span className="text-[10px] font-semibold text-emerald-400">
+                    {payStats.paidCount} settled
+                  </span>
                   <span className="text-[10px] text-slate-500">from balances</span>
                 </div>
               </div>
@@ -722,7 +750,9 @@ export default function ReceivableManager({
             {/* Total Payable */}
             <div className="glass-panel rounded-2xl p-5 border border-indigo-500/20 relative overflow-hidden">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Payable</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  Total Payable
+                </span>
                 <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400">
                   <Coins className="w-4 h-4" />
                 </div>
@@ -731,31 +761,41 @@ export default function ReceivableManager({
                 <span className="text-2xl font-bold text-white tracking-tight">
                   ৳{payStats.total.toLocaleString()}
                 </span>
-                <span className="text-[10px] text-slate-500 block mt-1">{payables.length} total entries</span>
+                <span className="text-[10px] text-slate-500 block mt-1">
+                  {payables.length} total entries
+                </span>
               </div>
             </div>
 
             {/* Deduction breakdown by account */}
             <div className="glass-panel rounded-2xl p-5 border border-slate-900 relative overflow-hidden">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Deducted From</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
+                Deducted From
+              </span>
               <div className="space-y-1.5 text-xs">
                 <div className="flex items-center justify-between">
                   <span className="text-slate-400 text-[11px] flex items-center gap-1">
                     <PiggyBank className="w-3 h-3 text-amber-400" /> Hand Cash:
                   </span>
-                  <span className="font-bold text-slate-200">৳{payStats.paidInCash.toLocaleString()}</span>
+                  <span className="font-bold text-slate-200">
+                    ৳{payStats.paidInCash.toLocaleString()}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-slate-400 text-[11px] flex items-center gap-1">
                     <CreditCard className="w-3 h-3 text-violet-400" /> Online:
                   </span>
-                  <span className="font-bold text-slate-200">৳{payStats.paidInOnline.toLocaleString()}</span>
+                  <span className="font-bold text-slate-200">
+                    ৳{payStats.paidInOnline.toLocaleString()}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-slate-400 text-[11px] flex items-center gap-1">
                     <Wallet className="w-3 h-3 text-emerald-400" /> Other Cash:
                   </span>
-                  <span className="font-bold text-slate-200">৳{payStats.paidInOtherCash.toLocaleString()}</span>
+                  <span className="font-bold text-slate-200">
+                    ৳{payStats.paidInOtherCash.toLocaleString()}
+                  </span>
                 </div>
               </div>
             </div>
@@ -780,7 +820,9 @@ export default function ReceivableManager({
                   type="button"
                   onClick={() => setPayStatusFilter('all')}
                   className={`px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                    payStatusFilter === 'all' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                    payStatusFilter === 'all'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white'
                   }`}
                 >
                   All ({payables.length})
@@ -790,7 +832,9 @@ export default function ReceivableManager({
                   type="button"
                   onClick={() => setPayStatusFilter('unpaid')}
                   className={`px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                    payStatusFilter === 'unpaid' ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                    payStatusFilter === 'unpaid'
+                      ? 'bg-rose-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white'
                   }`}
                 >
                   Unpaid ({payStats.unpaidCount})
@@ -800,7 +844,9 @@ export default function ReceivableManager({
                   type="button"
                   onClick={() => setPayStatusFilter('paid')}
                   className={`px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                    payStatusFilter === 'paid' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                    payStatusFilter === 'paid'
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white'
                   }`}
                 >
                   Paid ({payStats.paidCount})
@@ -820,7 +866,11 @@ export default function ReceivableManager({
               {(paySearchQuery || payStatusFilter !== 'all' || payAccountFilter !== 'all') && (
                 <button
                   type="button"
-                  onClick={() => { setPaySearchQuery(''); setPayStatusFilter('all'); setPayAccountFilter('all'); }}
+                  onClick={() => {
+                    setPaySearchQuery('');
+                    setPayStatusFilter('all');
+                    setPayAccountFilter('all');
+                  }}
                   className="p-1.5 rounded-lg border border-slate-800 text-slate-400 hover:text-white transition-all cursor-pointer"
                   title="Clear all filters"
                 >
@@ -871,13 +921,11 @@ export default function ReceivableManager({
                     {filteredPayables.map(pay => {
                       // pay.status === 'Paid' হলে button disabled করা হবে (double payment রোধ)
                       const isPaid = pay.status === 'Paid';
-                      const accConfig = ACCOUNT_LABELS[pay.paidAccount || 'cash'] || ACCOUNT_LABELS.cash;
+                      const accConfig =
+                        ACCOUNT_LABELS[pay.paidAccount || 'cash'] || ACCOUNT_LABELS.cash;
 
                       return (
-                        <tr
-                          key={pay.id}
-                          className="text-slate-300 group"
-                        >
+                        <tr key={pay.id} className="text-slate-300 group">
                           {/* Supplier / Person Name */}
                           <td>
                             <div className="flex items-center gap-3">
@@ -885,7 +933,9 @@ export default function ReceivableManager({
                                 <Building2 className="w-4 h-4 text-rose-400" />
                               </div>
                               <div>
-                                <span className="font-bold text-white block text-xs">{pay.name}</span>
+                                <span className="font-bold text-white block text-xs">
+                                  {pay.name}
+                                </span>
                                 {/* Paid হলে কোন তারিখে pay করা হয়েছে তা দেখানো */}
                                 {isPaid && pay.paidDate && (
                                   <span className="text-[10px] text-slate-500 block">
@@ -919,7 +969,9 @@ export default function ReceivableManager({
                               <span className="badge-pill badge-emerald">
                                 <CheckCircle2 className="w-3.5 h-3.5" />
                                 <span>Paid</span>
-                                <span className="text-[10px] opacity-80 font-normal">({accConfig.label})</span>
+                                <span className="text-[10px] opacity-80 font-normal">
+                                  ({accConfig.label})
+                                </span>
                               </span>
                             ) : (
                               <span className="badge-pill badge-rose">
@@ -1218,10 +1270,7 @@ export default function ReceivableManager({
                       const AccIcon = accConfig.icon;
 
                       return (
-                        <tr
-                          key={rec.id}
-                          className="text-slate-300 group"
-                        >
+                        <tr key={rec.id} className="text-slate-300 group">
                           {/* Person / Business Name */}
                           <td>
                             <div className="flex items-center gap-3">
@@ -1346,7 +1395,9 @@ export default function ReceivableManager({
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-white">Confirm Payment</h3>
-                  <span className="text-[10px] text-slate-400">Mark as paid and deduct from selected balance</span>
+                  <span className="text-[10px] text-slate-400">
+                    Mark as paid and deduct from selected balance
+                  </span>
                 </div>
               </div>
               <button
@@ -1374,7 +1425,8 @@ export default function ReceivableManager({
                 </div>
                 {payingRecord.note && (
                   <div className="pt-2 border-t border-slate-800/60 text-[11px] text-slate-400">
-                    <span className="text-slate-500">Note: </span>{payingRecord.note}
+                    <span className="text-slate-500">Note: </span>
+                    {payingRecord.note}
                   </div>
                 )}
               </div>
@@ -1387,9 +1439,27 @@ export default function ReceivableManager({
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   {[
-                    { id: 'cash', label: 'Hand Cash', desc: 'Physical Cash', icon: PiggyBank, color: 'text-amber-400' },
-                    { id: 'online', label: 'Online Cash', desc: 'bKash / Bank', icon: CreditCard, color: 'text-violet-400' },
-                    { id: 'other_cash', label: 'Other Cash', desc: 'Extra Reserve', icon: Wallet, color: 'text-emerald-400' },
+                    {
+                      id: 'cash',
+                      label: 'Hand Cash',
+                      desc: 'Physical Cash',
+                      icon: PiggyBank,
+                      color: 'text-amber-400',
+                    },
+                    {
+                      id: 'online',
+                      label: 'Online Cash',
+                      desc: 'bKash / Bank',
+                      icon: CreditCard,
+                      color: 'text-violet-400',
+                    },
+                    {
+                      id: 'other_cash',
+                      label: 'Other Cash',
+                      desc: 'Extra Reserve',
+                      icon: Wallet,
+                      color: 'text-emerald-400',
+                    },
                   ].map(acc => {
                     const Icon = acc.icon;
                     // isSelected: বর্তমানে কোন account select করা আছে
@@ -1452,8 +1522,11 @@ export default function ReceivableManager({
                 <Info className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
                 <span>
                   Confirming will mark this as <strong>Paid</strong> and deduct{' '}
-                  <strong className="text-rose-400">৳{parseFloat(payingRecord.amount || 0).toLocaleString()}</strong> from your{' '}
-                  <strong>{ACCOUNT_LABELS[payModal.paidAccount]?.label}</strong> balance immediately.
+                  <strong className="text-rose-400">
+                    ৳{parseFloat(payingRecord.amount || 0).toLocaleString()}
+                  </strong>{' '}
+                  from your <strong>{ACCOUNT_LABELS[payModal.paidAccount]?.label}</strong> balance
+                  immediately.
                 </span>
               </div>
 
@@ -1556,7 +1629,9 @@ export default function ReceivableManager({
 
               {/* Note */}
               <div className="space-y-1.5">
-                <label className="text-[11px] font-medium text-slate-300 block">Note / Purpose (optional)</label>
+                <label className="text-[11px] font-medium text-slate-300 block">
+                  Note / Purpose (optional)
+                </label>
                 <textarea
                   rows={2}
                   value={payForm.note}
@@ -1568,7 +1643,9 @@ export default function ReceivableManager({
 
               {/* Status Selector */}
               <div className="space-y-1.5">
-                <label className="text-[11px] font-medium text-slate-300 block">Payment Status</label>
+                <label className="text-[11px] font-medium text-slate-300 block">
+                  Payment Status
+                </label>
                 <select
                   value={payForm.status}
                   onChange={e => setPayForm(prev => ({ ...prev, status: e.target.value }))}
@@ -1582,7 +1659,9 @@ export default function ReceivableManager({
               {/* যদি Paid select করা হয়, account selector দেখাবে */}
               {payForm.status === 'Paid' && (
                 <div className="space-y-1.5 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
-                  <label className="text-[11px] font-medium text-slate-300 block">Deduct From Balance</label>
+                  <label className="text-[11px] font-medium text-slate-300 block">
+                    Deduct From Balance
+                  </label>
                   <select
                     value={payForm.paidAccount}
                     onChange={e => setPayForm(prev => ({ ...prev, paidAccount: e.target.value }))}
@@ -1609,7 +1688,11 @@ export default function ReceivableManager({
                   disabled={isPaySubmitting}
                   className="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-rose-600/20 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50"
                 >
-                  {isPaySubmitting ? 'Saving...' : editingPayable ? 'Update Record' : 'Save Payable'}
+                  {isPaySubmitting
+                    ? 'Saving...'
+                    : editingPayable
+                      ? 'Update Record'
+                      : 'Save Payable'}
                 </button>
               </div>
             </form>

@@ -119,7 +119,7 @@ export default function ExpenseManager({
           month: r.month,
           merchantName: r.merchantName,
           category: 'Rider Wages',
-          name: r.riderName ? `Rider Wages: ${r.riderName}` : 'Rider Wages',
+          name: r.riderName ? `Rider Salary: ${r.riderName}` : 'Rider Salary',
           amount: rs,
           originalRecord: r,
           field: 'rider',
@@ -325,7 +325,7 @@ export default function ExpenseManager({
             bg: 'bg-rose-500/10',
           },
           {
-            title: 'Courier Wages',
+            title: 'Rider Salary',
             value: `৳${stats.riders.toLocaleString()}`,
             icon: UserCheck,
             color: 'text-rose-400',
@@ -339,7 +339,7 @@ export default function ExpenseManager({
             bg: 'bg-amber-500/10',
           },
           {
-            title: 'Variable Overheads',
+            title: 'Other Expenses',
             value: `৳${stats.variable.toLocaleString()}`,
             icon: AlertOctagon,
             color: 'text-violet-400',
@@ -380,9 +380,9 @@ export default function ExpenseManager({
           ) : (
             <div className="space-y-4">
               {[
-                { name: 'Rider Wages', value: stats.riders, color: 'bg-rose-500' },
+                { name: 'Rider Salary', value: stats.riders, color: 'bg-rose-500' },
                 { name: 'Fixed Costs', value: stats.fixed, color: 'bg-amber-500' },
-                { name: 'Variable Overheads', value: stats.variable, color: 'bg-violet-500' },
+                { name: 'Other Expenses', value: stats.variable, color: 'bg-violet-500' },
               ].map((cat, idx) => {
                 const percent = (cat.value / maxBarVal) * 100;
                 return (
@@ -410,7 +410,7 @@ export default function ExpenseManager({
               Expense Entry Rules
             </h3>
             <p className="text-xs text-slate-500 leading-relaxed">
-              Use the expense form to log rider wages, variable overheads, and fixed costs in their
+              Use the expense form to log rider salary, other expenses, and fixed costs in their
               own section. Expenses reduce your net cash balance along with merchant bill payouts.
             </p>
           </div>
@@ -443,9 +443,9 @@ export default function ExpenseManager({
             className="flex-1 bg-slate-950/80 border border-slate-800 focus:border-indigo-500 rounded-xl px-3 py-2 text-xs text-white outline-none"
           >
             <option value="All">All Categories</option>
-            <option value="Rider Wages">Rider Wages</option>
+            <option value="Rider Wages">Rider Salary</option>
             <option value="Fixed Cost">Fixed Costs</option>
-            <option value="Variable Overhead">Variable Overheads</option>
+            <option value="Variable Overhead">Other Expenses</option>
           </select>
         </div>
       </div>
@@ -501,7 +501,11 @@ export default function ExpenseManager({
                               : 'bg-violet-500/10 border-violet-500/20 text-violet-400'
                         }`}
                       >
-                        {item.category}
+                        {item.category === 'Rider Wages'
+                          ? 'Rider Salary'
+                          : item.category === 'Variable Overhead'
+                            ? 'Other Expenses'
+                            : item.category}
                       </span>
                     </td>
                     <td className="p-4 font-semibold text-white">{item.name}</td>

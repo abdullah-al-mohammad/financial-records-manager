@@ -161,7 +161,15 @@ export default function BillingManager({
       return {
         records: [],
         payments: [],
-        totals: { sales: 0, billed: 0, commission: 0, paid: 0, ending: 0 },
+        totals: {
+          sales: 0,
+          totalBill: 0,
+          billed: 0,
+          commission: 0,
+          commissionBill: 0,
+          paid: 0,
+          ending: 0,
+        },
         totalMerchantRecords: 0,
       };
     }
@@ -616,11 +624,8 @@ export default function BillingManager({
                 )}
               </p>
               <div className="flex flex-wrap items-center gap-3">
-                <span className="text-xs font-bold text-slate-300">
-                  Total Bill: <span className="text-white">৳{merchantBillReportData.totals.totalBill.toLocaleString()}</span>
-                </span>
                 <span className="text-xs font-bold text-indigo-400">
-                  Commission Bill: ৳{merchantBillReportData.totals.commissionBill.toLocaleString()}
+                  Total Bill: ৳{(merchantBillReportData?.totals?.commissionBill || 0).toLocaleString()}
                 </span>
               </div>
             </div>
@@ -630,14 +635,13 @@ export default function BillingManager({
                   <tr>
                     <th className="p-2.5 whitespace-nowrap">Order Date</th>
                     <th className="p-2.5">Order Details</th>
-                    <th className="p-2.5 text-right whitespace-nowrap">Total Bill Amount</th>
-                    <th className="p-2.5 text-right whitespace-nowrap">Commission Bill Amount</th>
+                    <th className="p-2.5 text-right whitespace-nowrap">Amount</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-900/60 text-slate-300">
                   {merchantBillReportData.records.length === 0 ? (
                     <tr>
-                      <td colSpan="4" className="p-4 text-center text-slate-500">
+                      <td colSpan="3" className="p-4 text-center text-slate-500">
                         {merchantBillReportData.totalMerchantRecords === 0
                           ? `No sales records found for ${activeReportMerchant}.`
                           : billReportStartDate || billReportEndDate
@@ -650,9 +654,6 @@ export default function BillingManager({
                       <tr key={r.id}>
                         <td className="p-2.5 whitespace-nowrap">{formatOrderDate(r.date)}</td>
                         <td className="p-2.5">{formatOrderDetails(r)}</td>
-                        <td className="p-2.5 text-right text-slate-200 whitespace-nowrap font-medium">
-                          ৳{getRecordSalesAmount(r).toLocaleString()}
-                        </td>
                         <td className="p-2.5 text-right font-bold text-indigo-400 whitespace-nowrap">
                           ৳{getRecordMerchantBill(r).toLocaleString()}
                         </td>
@@ -664,11 +665,8 @@ export default function BillingManager({
                   <tfoot className="border-t border-slate-800 bg-slate-950 font-semibold text-slate-200">
                     <tr>
                       <td colSpan="2" className="p-2.5">Total</td>
-                      <td className="p-2.5 text-right text-white whitespace-nowrap font-bold">
-                        ৳{merchantBillReportData.totals.totalBill.toLocaleString()}
-                      </td>
                       <td className="p-2.5 text-right text-indigo-400 whitespace-nowrap font-bold">
-                        ৳{merchantBillReportData.totals.commissionBill.toLocaleString()}
+                        ৳{(merchantBillReportData?.totals?.commissionBill || 0).toLocaleString()}
                       </td>
                     </tr>
                   </tfoot>
@@ -1167,21 +1165,13 @@ export default function BillingManager({
               </div>
 
               {/* Period Performance Metrics Card */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div className="p-3 bg-slate-950/40 border border-slate-900 rounded-xl text-center">
                   <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">
-                    Total Bill
-                  </span>
-                  <span className="text-sm font-extrabold text-white block mt-1">
-                    ৳{merchantBillReportData.totals.totalBill.toLocaleString()}
-                  </span>
-                </div>
-                <div className="p-3 bg-slate-950/40 border border-slate-900 rounded-xl text-center">
-                  <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">
-                    Commission Bill
+                    Billed in Period
                   </span>
                   <span className="text-sm font-extrabold text-indigo-400 block mt-1">
-                    ৳{merchantBillReportData.totals.commissionBill.toLocaleString()}
+                    ৳{(merchantBillReportData?.totals?.commissionBill || 0).toLocaleString()}
                   </span>
                 </div>
                 <div className="p-3 bg-slate-950/40 border border-slate-900 rounded-xl text-center">
@@ -1189,7 +1179,7 @@ export default function BillingManager({
                     Paid in Period
                   </span>
                   <span className="text-sm font-extrabold text-emerald-400 block mt-1">
-                    ৳{merchantBillReportData.totals.paid.toLocaleString()}
+                    ৳{(merchantBillReportData?.totals?.paid || 0).toLocaleString()}
                   </span>
                 </div>
                 <div className="p-3 bg-slate-950/40 border border-slate-900 rounded-xl text-center">
@@ -1197,9 +1187,9 @@ export default function BillingManager({
                     Outstanding
                   </span>
                   <span
-                    className={`text-sm font-extrabold block mt-1 ${merchantBillReportData.totals.ending > 0 ? 'text-rose-400' : 'text-emerald-400'}`}
+                    className={`text-sm font-extrabold block mt-1 ${(merchantBillReportData?.totals?.ending || 0) > 0 ? 'text-rose-400' : 'text-emerald-400'}`}
                   >
-                    ৳{merchantBillReportData.totals.ending.toLocaleString()}
+                    ৳{(merchantBillReportData?.totals?.ending || 0).toLocaleString()}
                   </span>
                 </div>
               </div>
@@ -1215,14 +1205,13 @@ export default function BillingManager({
                       <tr>
                         <th className="p-2.5">Order Date</th>
                         <th className="p-2.5">Order Details</th>
-                        <th className="p-2.5 text-right">Total Bill Amount</th>
-                        <th className="p-2.5 text-right">Commission Bill Amount</th>
+                        <th className="p-2.5 text-right">Amount</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-900/60 text-slate-300">
                       {merchantBillReportData?.records.length === 0 ? (
                         <tr>
-                          <td colSpan="4" className="p-4 text-center text-slate-500">
+                          <td colSpan="3" className="p-4 text-center text-slate-500">
                             No orders in this date range.
                           </td>
                         </tr>
@@ -1231,9 +1220,6 @@ export default function BillingManager({
                           <tr key={r.id}>
                             <td className="p-2.5 whitespace-nowrap">{formatOrderDate(r.date)}</td>
                             <td className="p-2.5">{formatOrderDetails(r)}</td>
-                            <td className="p-2.5 text-right text-slate-200 whitespace-nowrap font-medium">
-                              ৳{getRecordSalesAmount(r).toLocaleString()}
-                            </td>
                             <td className="p-2.5 text-right font-bold text-indigo-400 whitespace-nowrap">
                               ৳{getRecordMerchantBill(r).toLocaleString()}
                             </td>
@@ -1245,11 +1231,8 @@ export default function BillingManager({
                       <tfoot className="border-t border-slate-900 bg-slate-950/80 font-bold text-slate-200">
                         <tr>
                           <td colSpan="2" className="p-2.5">Total</td>
-                          <td className="p-2.5 text-right text-white whitespace-nowrap">
-                            ৳{merchantBillReportData.totals.totalBill.toLocaleString()}
-                          </td>
                           <td className="p-2.5 text-right text-indigo-400 whitespace-nowrap">
-                            ৳{merchantBillReportData.totals.commissionBill.toLocaleString()}
+                            ৳{(merchantBillReportData?.totals?.commissionBill || 0).toLocaleString()}
                           </td>
                         </tr>
                       </tfoot>
@@ -1358,14 +1341,13 @@ export default function BillingManager({
               <tr className="border-b border-slate-300 bg-slate-100/80 font-bold text-slate-700">
                 <th className="py-2 px-3">Order Date</th>
                 <th className="py-2 px-3">Order Details</th>
-                <th className="py-2 px-3 text-right">Total Bill Amount</th>
-                <th className="py-2 px-3 text-right">Commission Bill Amount</th>
+                <th className="py-2 px-3 text-right">Amount</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {merchantBillReportData?.records.length === 0 ? (
                 <tr>
-                  <td colSpan="4" className="py-4 px-3 text-center text-slate-500 italic">
+                  <td colSpan="3" className="py-4 px-3 text-center text-slate-500 italic">
                     No orders recorded in this period.
                   </td>
                 </tr>
@@ -1374,10 +1356,7 @@ export default function BillingManager({
                   <tr key={r.id}>
                     <td className="py-2 px-3">{formatOrderDate(r.date)}</td>
                     <td className="py-2 px-3 text-slate-700">{formatOrderDetails(r)}</td>
-                    <td className="py-2 px-3 text-right text-slate-800 font-medium">
-                      ৳{getRecordSalesAmount(r).toLocaleString()}
-                    </td>
-                    <td className="py-2 px-3 text-right font-bold text-slate-900">
+                    <td className="py-2 px-3 text-right font-bold text-slate-800">
                       ৳{getRecordMerchantBill(r).toLocaleString()}
                     </td>
                   </tr>
@@ -1388,13 +1367,10 @@ export default function BillingManager({
               <tfoot>
                 <tr className="border-t-2 border-slate-300 font-bold text-slate-800">
                   <td className="py-2 px-3" colSpan="2">
-                    Total
+                    Total Bill Amount
                   </td>
                   <td className="py-2 px-3 text-right text-slate-900 font-bold">
-                    ৳{merchantBillReportData.totals.totalBill.toLocaleString()}
-                  </td>
-                  <td className="py-2 px-3 text-right text-slate-900 font-bold">
-                    ৳{merchantBillReportData.totals.commissionBill.toLocaleString()}
+                    ৳{(merchantBillReportData?.totals?.commissionBill || 0).toLocaleString()}
                   </td>
                 </tr>
               </tfoot>
@@ -1459,29 +1435,23 @@ export default function BillingManager({
             <div className="flex justify-between text-xs text-slate-600">
               <span>Total Bill Amount:</span>
               <span className="font-semibold text-slate-900">
-                ৳{merchantBillReportData?.totals.totalBill.toLocaleString()}
-              </span>
-            </div>
-            <div className="flex justify-between text-xs text-slate-600">
-              <span className="font-semibold text-slate-800">Commission Bill Amount:</span>
-              <span className="font-bold text-slate-900">
-                ৳{merchantBillReportData?.totals.commissionBill.toLocaleString()}
+                ৳{(merchantBillReportData?.totals?.commissionBill || 0).toLocaleString()}
               </span>
             </div>
             <div className="flex justify-between text-xs text-slate-600">
               <span>Total Paid:</span>
               <span className="font-semibold text-emerald-700">
-                ৳{merchantBillReportData?.totals.paid.toLocaleString()}
+                ৳{(merchantBillReportData?.totals?.paid || 0).toLocaleString()}
               </span>
             </div>
             <div className="flex justify-between text-sm border-t border-slate-300 pt-2 font-bold text-slate-900">
               <span>Outstanding Period Balance:</span>
               <span
                 className={
-                  merchantBillReportData?.totals.ending > 0 ? 'text-rose-700' : 'text-emerald-700'
+                  (merchantBillReportData?.totals?.ending || 0) > 0 ? 'text-rose-700' : 'text-emerald-700'
                 }
               >
-                ৳{merchantBillReportData?.totals.ending.toLocaleString()}
+                ৳{(merchantBillReportData?.totals?.ending || 0).toLocaleString()}
               </span>
             </div>
           </div>

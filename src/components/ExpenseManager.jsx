@@ -3,6 +3,7 @@ import {
   Calendar,
   DollarSign,
   Edit2,
+  Percent,
   Plus,
   Search,
   Settings,
@@ -155,6 +156,22 @@ export default function ExpenseManager({
           field: 'fixed',
         });
       }
+
+      const da = parseFloat(r.discountAmount) || 0;
+      if (da > 0) {
+        list.push({
+          id: `${r.id}_discount`,
+          date: r.date,
+          createdAt: r.createdAt,
+          month: r.month,
+          merchantName: r.merchantName,
+          category: 'Discounts',
+          name: r.discountPercent ? `Sales Discount (${r.discountPercent}%)` : 'Sales Discount',
+          amount: da,
+          originalRecord: r,
+          field: 'discount',
+        });
+      }
     });
 
     return sortRecordsByDateDesc(list);
@@ -170,7 +187,7 @@ export default function ExpenseManager({
     });
   }, [itemizedExpenses, searchTerm, filterCategory]);
 
-  const maxBarVal = Math.max(stats.riders, stats.fixed, stats.variable, 100);
+  const maxBarVal = Math.max(stats.riders, stats.fixed, stats.variable, stats.discounts || 0, 100);
 
   const handleChange = e => {
     const { name, value } = e.target;
@@ -244,7 +261,8 @@ export default function ExpenseManager({
     const remainingRider = item.field === 'rider' ? 0 : (parseFloat(record.riderSalary) || 0);
     const remainingOther = item.field === 'other' ? 0 : (parseFloat(record.otherExpense) || 0);
     const remainingFixed = item.field === 'fixed' ? 0 : (parseFloat(record.fixedExpense) || 0);
-    const otherExpensesRemaining = remainingRider > 0 || remainingOther > 0 || remainingFixed > 0;
+    const remainingDiscount = item.field === 'discount' ? 0 : (parseFloat(record.discountAmount) || 0);
+    const otherExpensesRemaining = remainingRider > 0 || remainingOther > 0 || remainingFixed > 0 || remainingDiscount > 0;
 
     if (!hasSales && !otherExpensesRemaining) {
       if (window.confirm('Delete this expense entry permanently?')) {
@@ -268,6 +286,12 @@ export default function ExpenseManager({
     } else if (item.field === 'fixed') {
       updated.fixedExpenseName = '';
       updated.fixedExpense = '0';
+    } else if (item.field === 'discount') {
+      updated.discountPercent = '0';
+      updated.discountAmount = '0.00';
+      const sales = parseFloat(updated.salesAmount) || 0;
+      const delivery = parseFloat(updated.deliveryCharge) || 0;
+      updated.paidByCustomer = (sales + delivery).toFixed(2);
     }
 
     await onUpdateRecord(updated);
@@ -315,7 +339,7 @@ export default function ExpenseManager({
       </div>
 
       {/* Expense category metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {[
           {
             title: 'Total Operational Costs',
@@ -344,6 +368,13 @@ export default function ExpenseManager({
             icon: AlertOctagon,
             color: 'text-violet-400',
             bg: 'bg-violet-500/10',
+          },
+          {
+            title: 'Sales Discounts',
+            value: `৳${(stats.discounts || 0).toLocaleString()}`,
+            icon: Percent,
+            color: 'text-emerald-400',
+            bg: 'bg-emerald-500/10',
           },
         ].map((c, i) => {
           const Icon = c.icon;
@@ -383,6 +414,7 @@ export default function ExpenseManager({
                 { name: 'Rider Salary', value: stats.riders, color: 'bg-rose-500' },
                 { name: 'Fixed Costs', value: stats.fixed, color: 'bg-amber-500' },
                 { name: 'Other Expenses', value: stats.variable, color: 'bg-violet-500' },
+                { name: 'Sales Discounts', value: stats.discounts || 0, color: 'bg-emerald-500' },
               ].map((cat, idx) => {
                 const percent = (cat.value / maxBarVal) * 100;
                 return (
@@ -411,7 +443,7 @@ export default function ExpenseManager({
             </h3>
             <p className="text-xs text-slate-500 leading-relaxed">
               Use the expense form to log rider salary, other expenses, and fixed costs in their
-              own section. Expenses reduce your net cash balance along with merchant bill payouts.
+              own section. Customer discounts from sales records are automatically tracked as business expenses.
             </p>
           </div>
           <div className="mt-4 pt-4 border-t border-slate-900 flex items-center justify-between text-xs text-slate-400">
@@ -446,6 +478,7 @@ export default function ExpenseManager({
             <option value="Rider Wages">Rider Salary</option>
             <option value="Fixed Cost">Fixed Costs</option>
             <option value="Variable Overhead">Other Expenses</option>
+            <option value="Discounts">Sales Discounts</option>
           </select>
         </div>
       </div>
@@ -498,7 +531,9 @@ export default function ExpenseManager({
                             ? 'bg-rose-500/10 border-rose-500/20 text-rose-400'
                             : item.category === 'Fixed Cost'
                               ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
-                              : 'bg-violet-500/10 border-violet-500/20 text-violet-400'
+                              : item.category === 'Discounts'
+                                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                                : 'bg-violet-500/10 border-violet-500/20 text-violet-400'
                         }`}
                       >
                         {item.category === 'Rider Wages'

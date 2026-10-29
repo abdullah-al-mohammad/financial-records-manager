@@ -372,3 +372,32 @@ test('Without an opening balance record, opening cash is zero and monthly flows 
   assert.equal(balance.netRemaining, 800);
 });
 
+test('sumExpensesFromRecords includes discountAmount in expenses', async () => {
+  const records = [
+    {
+      id: 'r1',
+      riderSalary: '1200',
+      otherExpense: '300',
+      fixedExpense: '1500',
+      discountAmount: '1000',
+    },
+    {
+      id: 'r2',
+      riderSalary: '800',
+      otherExpense: '200',
+      fixedExpense: '0',
+      discountAmount: '500',
+    },
+  ];
+
+  const { sumExpensesFromRecords } = await import('../src/utils/finance.js');
+  const expenses = sumExpensesFromRecords(records);
+
+  assert.equal(expenses.riders, 2000);
+  assert.equal(expenses.variable, 500);
+  assert.equal(expenses.fixed, 1500);
+  assert.equal(expenses.discounts, 1500);
+  assert.equal(expenses.total, 5500);
+});
+
+

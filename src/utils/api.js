@@ -299,7 +299,122 @@ export function clearSession() {
   clearApiCache();
 }
 
-// JSONP request helper (avoids CORS)
+// GET request helper (standard fetch)
+async function makeFetchGetRequest(action, payload = {}) {
+  const scriptUrl = getScriptUrl();
+  if (!scriptUrl) {
+    throw new Error('Google Apps Script URL is not configured.');
+  }
+
+  const url = new URL(scriptUrl);
+  url.searchParams.set('action', action);
+
+  const session = getCurrentSession();
+  if (session?.sessionToken) {
+    url.searchParams.set('sessionToken', session.sessionToken);
+  }
+
+  Object.entries(payload).forEach(([key, val]) => {
+    if (val === null || val === undefined) return;
+    url.searchParams.set(key, typeof val === 'object' ? JSON.stringify(val) : String(val));
+  });
+
+  const response = await fetch(url.toString(), {
+    method: 'GET',
+    redirect: 'follow',
+  });
+
+  const text = await response.text();
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    const match = text.match(/^[a-zA-Z0-9_$]+\(([\s\S]*)\);?\s*$/);
+    if (match) {
+      json = JSON.parse(match[1]);
+    } else {
+      throw new Error('Malformed backend response');
+    }
+  }
+
+  if (json && json.success) {
+    return json;
+  }
+  const errorMsg = json?.error || 'Operation failed on backend.';
+  if (
+    String(errorMsg).toLowerCase().includes('unauthorized') ||
+    String(errorMsg).toLowerCase().includes('session invalid') ||
+    String(errorMsg).toLowerCase().includes('expired')
+  ) {
+    window.dispatchEvent(new CustomEvent('session-expired'));
+  }
+  throw new Error(errorMsg);
+}
+
+// POST request helper (uses fetch, sends plain text JSON body to avoid CORS preflight)
+async function makePostRequest(action, payload = {}) {
+  const scriptUrl = getScriptUrl();
+  if (!scriptUrl) {
+    throw new Error('Google Apps Script URL is not configured.');
+  }
+
+  const session = getCurrentSession();
+  const body = { action, ...payload };
+  if (session?.sessionToken) {
+    body.sessionToken = session.sessionToken;
+  }
+
+  try {
+    const response = await fetch(scriptUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8',
+      },
+      body: JSON.stringify(body),
+    });
+    const text = await response.text();
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      throw new Error('Malformed response from backend server.');
+    }
+    if (json && json.success) {
+      return json;
+    }
+    const errorMsg = json?.error || 'Operation failed on backend.';
+    if (
+      String(errorMsg).toLowerCase().includes('unauthorized') ||
+      String(errorMsg).toLowerCase().includes('session invalid') ||
+      String(errorMsg).toLowerCase().includes('expired')
+    ) {
+      window.dispatchEvent(new CustomEvent('session-expired'));
+    }
+    throw new Error(errorMsg);
+  } catch (err) {
+    throw new Error(err?.message || 'Network request failed.');
+  }
+}
+
+// Fallback dispatcher: tries fetch POST or GET depending on operation
+async function makeFetchFallback(action, payload = {}) {
+  const hasComplexPayload = Object.values(payload).some(v => typeof v === 'object' && v !== null);
+  if (hasComplexPayload) {
+    try {
+      return await makePostRequest(action, payload);
+    } catch (e) {
+      return await makeFetchGetRequest(action, payload);
+    }
+  } else {
+    try {
+      return await makeFetchGetRequest(action, payload);
+    } catch (e) {
+      return await makePostRequest(action, payload);
+    }
+  }
+}
+
+// JSONP request helper with automatic fallback to Fetch
 function makeJsonpRequest(action, payload = {}) {
   const scriptUrl = getScriptUrl();
   if (!scriptUrl) {
@@ -307,10 +422,18 @@ function makeJsonpRequest(action, payload = {}) {
   }
 
   return new Promise((resolve, reject) => {
-    const callbackName = `FM_JSONP_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
-    const url = new URL(scriptUrl);
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      return makePostRequest(action, payload).then(resolve).catch(reject);
+    }
 
-    // Attach default parameters
+    const callbackName = `FM_JSONP_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+    let url;
+    try {
+      url = new URL(scriptUrl);
+    } catch (e) {
+      return reject(new Error('Invalid Google Apps Script URL configuration.'));
+    }
+
     url.searchParams.set('action', action);
     url.searchParams.set('callback', callbackName);
 
@@ -319,23 +442,23 @@ function makeJsonpRequest(action, payload = {}) {
       url.searchParams.set('sessionToken', session.sessionToken);
     }
 
-    // Attach request specific parameters
     Object.entries(payload).forEach(([key, val]) => {
       if (val === null || val === undefined) return;
       url.searchParams.set(key, typeof val === 'object' ? JSON.stringify(val) : String(val));
     });
 
     const startMs = performance.now();
+    let isCleanedUp = false;
+
     const timeout = window.setTimeout(() => {
       cleanup();
-      reject(
-        new Error(
-          'Network request timed out. Please check your internet connection or Google Apps Script health.'
-        )
-      );
-    }, 30000);
+      console.warn(`[Network] JSONP '${action}' timed out. Falling back to Fetch...`);
+      makeFetchFallback(action, payload).then(resolve).catch(reject);
+    }, 15000);
 
     function cleanup() {
+      if (isCleanedUp) return;
+      isCleanedUp = true;
       window.clearTimeout(timeout);
       delete window[callbackName];
       const scriptEl = document.getElementById(callbackName);
@@ -350,7 +473,11 @@ function makeJsonpRequest(action, payload = {}) {
         resolve(response);
       } else {
         const errorMsg = response?.error || 'Operation failed on backend.';
-        if (errorMsg.toLowerCase().includes('unauthorized') || errorMsg.toLowerCase().includes('session invalid') || errorMsg.toLowerCase().includes('expired')) {
+        if (
+          errorMsg.toLowerCase().includes('unauthorized') ||
+          errorMsg.toLowerCase().includes('session invalid') ||
+          errorMsg.toLowerCase().includes('expired')
+        ) {
           window.dispatchEvent(new CustomEvent('session-expired'));
         }
         reject(new Error(errorMsg));
@@ -363,48 +490,18 @@ function makeJsonpRequest(action, payload = {}) {
     script.src = url.toString();
     script.onerror = () => {
       cleanup();
-      reject(new Error('Connection failed. Please check your network and script configuration.'));
+      console.warn(`[Network] JSONP '${action}' failed (script.onerror). Attempting Fetch fallback...`);
+      makeFetchFallback(action, payload).then(resolve).catch(err => {
+        reject(
+          new Error(
+            `Connection failed: ${err.message || 'Network blocked or unavailable'}. Please verify script URL and check if browser ad-blocker or tracking protection is blocking requests.`
+          )
+        );
+      });
     };
 
     document.body.appendChild(script);
   });
-}
-
-// POST request helper (uses fetch, sends JSON body)
-async function makePostRequest(action, payload = {}) {
-  const scriptUrl = getScriptUrl();
-  if (!scriptUrl) {
-    return Promise.reject(new Error('Google Apps Script URL is not configured.'));
-  }
-
-  // Build request body with action and optional session token
-  const session = getCurrentSession();
-  const body = { action, ...payload };
-  if (session?.sessionToken) {
-    body.sessionToken = session.sessionToken;
-  }
-
-  try {
-    const response = await fetch(scriptUrl, {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
-    const json = await response.json();
-    if (json && json.success) {
-      return json;
-    }
-    const errorMsg = json?.error || 'Operation failed on backend.';
-    if (
-      String(errorMsg).toLowerCase().includes('unauthorized') ||
-      String(errorMsg).toLowerCase().includes('session invalid') ||
-      String(errorMsg).toLowerCase().includes('expired')
-    ) {
-      window.dispatchEvent(new CustomEvent('session-expired'));
-    }
-    return Promise.reject(new Error(errorMsg));
-  } catch (err) {
-    return Promise.reject(new Error(err?.message || 'Network request failed.'));
-  }
 }
 
 // Retry wrapper: retries the given async fn up to `maxRetries` times
@@ -424,6 +521,47 @@ async function fetchWithRetry(fn, maxRetries = 2) {
     }
   }
   throw lastError;
+}
+
+// Universal live request dispatcher with retry and multi-transport support
+export async function executeLiveRequest(action, payload = {}) {
+  return await fetchWithRetry(() => {
+    const isMutation = [
+      'create',
+      'update',
+      'delete',
+      'deleteAllRecords',
+      'createPayment',
+      'updatePayment',
+      'deletePayment',
+      'createTransfer',
+      'deleteTransfer',
+      'createReceivable',
+      'updateReceivable',
+      'deleteReceivable',
+      'createPayable',
+      'updatePayable',
+      'deletePayable',
+      'setOpeningBalance',
+      'deleteOpeningBalance',
+      'createMonthClosing',
+      'createOtherCashRecord',
+      'updateOtherCashRecord',
+      'deleteOtherCashRecord',
+      'createUser',
+      'updateUser',
+      'deleteUser',
+    ].includes(action);
+
+    if (isMutation) {
+      return makePostRequest(action, payload).catch(err => {
+        console.warn(`[Network] POST '${action}' failed, trying JSONP:`, err.message);
+        return makeJsonpRequest(action, payload);
+      });
+    }
+
+    return makeJsonpRequest(action, payload);
+  }, 2);
 }
 
 
@@ -535,7 +673,7 @@ export const api = {
     clearApiCache();
     const live = isLiveMode();
     if (live) {
-      return makeJsonpRequest('login', { username, password });
+      return executeLiveRequest('login', { username, password });
     } else {
       // Mock validation
       await new Promise(r => setTimeout(r, 600));
@@ -572,7 +710,7 @@ export const api = {
       'dashboardData',
       async () => {
         if (isLiveMode()) {
-          const resp = await fetchWithRetry(() => makeJsonpRequest('getDashboardData'));
+          const resp = await executeLiveRequest('getDashboardData');
           return {
             records:          ensureUniqueListIds(resp.records || [], 'rec').items,
             payments:         ensureUniqueListIds(resp.payments || [], 'pay').items,
@@ -698,7 +836,7 @@ export const api = {
       invalidateApiCache('dashboardData');
       invalidateApiCache('records');
       if (isLiveMode()) {
-        return await makeJsonpRequest('create', { record: newRecord });
+        return await executeLiveRequest('create', { record: newRecord });
       } else {
         await new Promise(r => setTimeout(r, 100));
         const records = mockDb.get('records', []);
@@ -729,7 +867,7 @@ export const api = {
       invalidateApiCache('dashboardData');
       invalidateApiCache('records');
       if (isLiveMode()) {
-        return makeJsonpRequest('update', { record: { ...record, id: targetId } });
+        return executeLiveRequest('update', { record: { ...record, id: targetId } });
       } else {
         await new Promise(r => setTimeout(r, 100));
         const records = mockDb.get('records', []);
@@ -759,7 +897,7 @@ export const api = {
       invalidateApiCache('dashboardData');
       invalidateApiCache('records');
       if (isLiveMode()) {
-        return makeJsonpRequest('delete', { id: targetId });
+        return executeLiveRequest('delete', { id: targetId });
       } else {
         await new Promise(r => setTimeout(r, 100));
         const records = mockDb.get('records', []);
@@ -788,7 +926,7 @@ export const api = {
       invalidateApiCache('dashboardData');
       invalidateApiCache('records');
       if (isLiveMode()) {
-        return makeJsonpRequest('deleteAllRecords');
+        return executeLiveRequest('deleteAllRecords');
       }
       mockDb.set('records', []);
       const session = getCurrentSession();

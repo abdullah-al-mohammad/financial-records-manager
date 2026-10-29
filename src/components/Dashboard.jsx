@@ -1,3 +1,4 @@
+import { format } from 'date-fns';
 import {
   Activity,
   ArrowRightLeft,
@@ -12,7 +13,6 @@ import {
   DollarSign,
   HandCoins,
   Landmark,
-  Minus,
   PencilLine,
   PiggyBank,
   PlusCircle,
@@ -26,9 +26,8 @@ import {
 } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import DatePicker from 'react-datepicker';
-import { format } from 'date-fns';
-import { computeNetCashBalance } from '../utils/finance';
 import { generateUniqueId } from '../utils/api';
+import { computeNetCashBalance } from '../utils/finance';
 
 export default function Dashboard({
   records,
@@ -69,7 +68,6 @@ export default function Dashboard({
     return idx >= 0 && idx < MONTHS_ORDER.length ? MONTHS_ORDER[idx] : key;
   };
 
-
   const balanceSummary = useMemo(() => {
     // Derive the current month's opening balance directly from the openingBalances array.
     // This is more reliable than the prop passed from App.jsx because it re-evaluates
@@ -93,9 +91,18 @@ export default function Dashboard({
       receivables || [],
       payables || [],
       openingForThisMonth,
-      otherCashRecords || [],
+      otherCashRecords || []
     );
-  }, [records, payments, transfers, receivables, payables, openingBalances, currentOpeningBalance, otherCashRecords]);
+  }, [
+    records,
+    payments,
+    transfers,
+    receivables,
+    payables,
+    openingBalances,
+    currentOpeningBalance,
+    otherCashRecords,
+  ]);
 
   // Resolved opening balance for the current month — same lookup used by balanceSummary,
   // exposed separately so the UI formula display and card sub-labels can reference it.
@@ -214,9 +221,12 @@ export default function Dashboard({
   const handleRemoveOpeningBalance = async () => {
     if (!resolvedOpeningBalance) return;
     if (obSubmittingRef.current || obSubmitting) return;
-    if (!window.confirm(
-      `Remove this month's opening balance? Cash balances will be recalculated without the opening amount. This cannot be undone.`
-    )) return;
+    if (
+      !window.confirm(
+        `Remove this month's opening balance? Cash balances will be recalculated without the opening amount. This cannot be undone.`
+      )
+    )
+      return;
     obSubmittingRef.current = true;
     setObSubmitting(true);
     try {
@@ -257,8 +267,10 @@ export default function Dashboard({
   };
 
   const fmt = n =>
-    Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-
+    Number(n || 0).toLocaleString(undefined, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    });
 
   const paymentTotals = useMemo(() => {
     const cash = parseFloat(balanceSummary?.cashBalance) || 0;
@@ -282,6 +294,7 @@ export default function Dashboard({
     let riderSalaries = 0;
     let otherExpenses = 0;
     let fixedExpenses = 0;
+    let discountExpenses = 0;
     let merchantBills = 0;
     let customerPaid = 0;
 
@@ -292,6 +305,7 @@ export default function Dashboard({
       riderSalaries += parseFloat(r.riderSalary) || 0;
       otherExpenses += parseFloat(r.otherExpense) || 0;
       fixedExpenses += parseFloat(r.fixedExpense) || 0;
+      discountExpenses += parseFloat(r.discountAmount) || 0;
       merchantBills += parseFloat(r.merchantBill) || 0;
       customerPaid += parseFloat(r.paidByCustomer) || 0;
     });
@@ -301,8 +315,8 @@ export default function Dashboard({
       otherCash += parseFloat(r.amount) || 0;
     });
 
-    const income = commission + delivery;
-    const expenses = riderSalaries + otherExpenses + fixedExpenses;
+    const income = commission + delivery - discountExpenses;
+    const expenses = riderSalaries + otherExpenses + fixedExpenses + discountExpenses;
     const netProfit = income - expenses;
 
     // Merchant balances
@@ -341,6 +355,7 @@ export default function Dashboard({
       riderSalaries,
       otherExpenses,
       fixedExpenses,
+      discountExpenses,
       merchantBills,
       customerPaid,
       merchantTotals,
@@ -387,7 +402,8 @@ export default function Dashboard({
       monthsMap[r.month].expenses +=
         (parseFloat(r.riderSalary) || 0) +
         (parseFloat(r.otherExpense) || 0) +
-        (parseFloat(r.fixedExpense) || 0);
+        (parseFloat(r.fixedExpense) || 0) +
+        (parseFloat(r.discountAmount) || 0);
     });
 
     // Sort based on calendar order
@@ -489,7 +505,11 @@ export default function Dashboard({
 
   // Expense breakdown calculations for Donut chart SVG
   const expensePieData = useMemo(() => {
-    const total = stats.riderSalaries + stats.fixedExpenses + stats.otherExpenses;
+    const total =
+      stats.riderSalaries +
+      stats.fixedExpenses +
+      stats.otherExpenses +
+      (stats.discountExpenses || 0);
     if (total === 0) return [];
 
     return [
@@ -511,6 +531,12 @@ export default function Dashboard({
         color: '#a855f7',
         percentage: (stats.otherExpenses / total) * 100,
       },
+      {
+        name: 'Sales Discounts',
+        value: stats.discountExpenses || 0,
+        color: '#10b981',
+        percentage: ((stats.discountExpenses || 0) / total) * 100,
+      },
     ].filter(item => item.value > 0);
   }, [stats]);
 
@@ -522,11 +548,15 @@ export default function Dashboard({
     const cy = 80;
     const strokeWidth = 22;
     const circumference = 2 * Math.PI * radius;
+    const totalExpenses =
+      stats.riderSalaries +
+      stats.fixedExpenses +
+      stats.otherExpenses +
+      (stats.discountExpenses || 0);
 
     return expensePieData.map((item, index) => {
-      const angle =
-        (item.value / (stats.riderSalaries + stats.fixedExpenses + stats.otherExpenses)) * 360;
-      const strokeDashArray = `${(item.value / (stats.riderSalaries + stats.fixedExpenses + stats.otherExpenses)) * circumference} ${circumference}`;
+      const angle = (item.value / totalExpenses) * 360;
+      const strokeDashArray = `${(item.value / totalExpenses) * circumference} ${circumference}`;
       const strokeDashOffset = -(cumulativeAngle / 360) * circumference;
       cumulativeAngle += angle;
 
@@ -613,9 +643,7 @@ export default function Dashboard({
                 System Financial Overview
               </h2>
             </div>
-            <span className="badge-pill badge-indigo">
-              Live Summary
-            </span>
+            <span className="badge-pill badge-indigo">Live Summary</span>
           </div>
           <div className="overflow-x-auto">
             <table className="modern-table">
@@ -831,13 +859,15 @@ export default function Dashboard({
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
                     Total Cash Balance
                   </span>
-                  <span className="badge-pill badge-indigo text-[10px]">
-                    Combined Liquidity
-                  </span>
+                  <span className="badge-pill badge-indigo text-[10px]">Combined Liquidity</span>
                 </div>
                 <div className="flex flex-wrap items-baseline gap-2 mt-1">
                   <span className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight">
-                    ৳{paymentTotals.totalCash.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                    ৳
+                    {paymentTotals.totalCash.toLocaleString(undefined, {
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 2,
+                    })}
                   </span>
                   <span className="text-xs font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
                     All Cash Reserves
@@ -846,9 +876,20 @@ export default function Dashboard({
                 <p className="text-xs text-slate-400 mt-1.5 flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                   <span>
-                    Total Cash = <span className="text-amber-400 font-semibold">Hand Cash</span> + <span className="text-violet-400 font-semibold">Online Cash</span> + <span className="text-emerald-400 font-semibold">Other Cash</span>
+                    Total Cash = <span className="text-amber-400 font-semibold">Hand Cash</span> +{' '}
+                    <span className="text-violet-400 font-semibold">Online Cash</span> +{' '}
+                    <span className="text-emerald-400 font-semibold">Other Cash</span>
                     {resolvedOpeningBalance && (
-                      <span className="text-indigo-400"> + <span className="font-semibold">Opening Balance</span> (৳{fmt((Number(resolvedOpeningBalance.handCash) || 0) + (Number(resolvedOpeningBalance.onlineCash) || 0) + (Number(resolvedOpeningBalance.otherCash) || 0))})</span>
+                      <span className="text-indigo-400">
+                        {' '}
+                        + <span className="font-semibold">Opening Balance</span> (৳
+                        {fmt(
+                          (Number(resolvedOpeningBalance.handCash) || 0) +
+                            (Number(resolvedOpeningBalance.onlineCash) || 0) +
+                            (Number(resolvedOpeningBalance.otherCash) || 0)
+                        )}
+                        )
+                      </span>
                     )}
                   </span>
                 </p>
@@ -915,7 +956,11 @@ export default function Dashboard({
               </div>
               <div className="mt-3">
                 <span className="text-2xl font-bold text-white tracking-tight block">
-                  ৳{paymentTotals.cash.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                  ৳
+                  {paymentTotals.cash.toLocaleString(undefined, {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 2,
+                  })}
                 </span>
                 {resolvedOpeningBalance && (Number(resolvedOpeningBalance.handCash) || 0) > 0 && (
                   <span className="text-[10px] text-indigo-400 font-medium block mt-0.5">
@@ -945,7 +990,11 @@ export default function Dashboard({
               </div>
               <div className="mt-3">
                 <span className="text-2xl font-bold text-white tracking-tight block">
-                  ৳{paymentTotals.online.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                  ৳
+                  {paymentTotals.online.toLocaleString(undefined, {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 2,
+                  })}
                 </span>
                 {resolvedOpeningBalance && (Number(resolvedOpeningBalance.onlineCash) || 0) > 0 && (
                   <span className="text-[10px] text-indigo-400 font-medium block mt-0.5">
@@ -975,7 +1024,11 @@ export default function Dashboard({
               </div>
               <div className="mt-3">
                 <span className="text-2xl font-bold text-white tracking-tight block">
-                  ৳{paymentTotals.otherCash.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                  ৳
+                  {paymentTotals.otherCash.toLocaleString(undefined, {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 2,
+                  })}
                 </span>
                 {resolvedOpeningBalance && (Number(resolvedOpeningBalance.otherCash) || 0) > 0 && (
                   <span className="text-[10px] text-indigo-400 font-medium block mt-0.5">
@@ -1002,17 +1055,26 @@ export default function Dashboard({
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[11px] font-bold text-indigo-300 uppercase tracking-wider">
-                  {openingSource === 'carryforward' ? 'Carried-Forward Opening Balance' : 'Manual Opening Balance'}
-                  <span className="normal-case font-medium text-slate-400"> — {currentMonthName} {currentYear}</span>
+                  {openingSource === 'carryforward'
+                    ? 'Carried-Forward Opening Balance'
+                    : 'Manual Opening Balance'}
+                  <span className="normal-case font-medium text-slate-400">
+                    {' '}
+                    — {currentMonthName} {currentYear}
+                  </span>
                 </p>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  Hand ৳{fmt(resolvedOpeningBalance.handCash)} · Online ৳{fmt(resolvedOpeningBalance.onlineCash)} · Other ৳{fmt(resolvedOpeningBalance.otherCash)}
+                  Hand ৳{fmt(resolvedOpeningBalance.handCash)} · Online ৳
+                  {fmt(resolvedOpeningBalance.onlineCash)} · Other ৳
+                  {fmt(resolvedOpeningBalance.otherCash)}
                   &nbsp;—&nbsp;added as this month's opening cash
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <span className="badge-pill badge-indigo text-[10px]">
-                  {openingSource === 'carryforward' ? 'Carried Forward from Previous Month' : 'Manual Entry'}
+                  {openingSource === 'carryforward'
+                    ? 'Carried Forward from Previous Month'
+                    : 'Manual Entry'}
                 </span>
                 <button
                   type="button"
@@ -1043,7 +1105,8 @@ export default function Dashboard({
                   Previous Month Closing Available
                 </p>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  {previousMonthClosing.month} {previousMonthClosing.year} closed with a total of ৳{fmt(previousMonthClosing.totalCash)}
+                  {previousMonthClosing.month} {previousMonthClosing.year} closed with a total of ৳
+                  {fmt(previousMonthClosing.totalCash)}
                   &nbsp;—&nbsp;carry it forward as {currentMonthName}'s opening balance?
                 </p>
               </div>
@@ -1069,12 +1132,18 @@ export default function Dashboard({
               >
                 <div className="flex items-center gap-2">
                   <BookOpen className="w-4 h-4 text-slate-400" />
-                  <span className="text-xs font-semibold text-slate-300">Monthly Closing History</span>
-                  <span className="badge-pill badge-indigo text-[10px]">{monthClosings.length} record{monthClosings.length !== 1 ? 's' : ''}</span>
+                  <span className="text-xs font-semibold text-slate-300">
+                    Monthly Closing History
+                  </span>
+                  <span className="badge-pill badge-indigo text-[10px]">
+                    {monthClosings.length} record{monthClosings.length !== 1 ? 's' : ''}
+                  </span>
                 </div>
-                {showClosingHistory
-                  ? <ChevronUp className="w-4 h-4 text-slate-400" />
-                  : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                {showClosingHistory ? (
+                  <ChevronUp className="w-4 h-4 text-slate-400" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-slate-400" />
+                )}
               </button>
 
               {showClosingHistory && (
@@ -1082,17 +1151,32 @@ export default function Dashboard({
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="bg-slate-800/60">
-                        <th className="px-4 py-3 text-left font-semibold text-slate-400 uppercase tracking-wider text-[10px]">Month</th>
-                        <th className="px-4 py-3 text-right font-semibold text-amber-400 uppercase tracking-wider text-[10px]">Hand Cash</th>
-                        <th className="px-4 py-3 text-right font-semibold text-violet-400 uppercase tracking-wider text-[10px]">Online Cash</th>
-                        <th className="px-4 py-3 text-right font-semibold text-emerald-400 uppercase tracking-wider text-[10px]">Other Cash</th>
-                        <th className="px-4 py-3 text-right font-semibold text-white uppercase tracking-wider text-[10px]">Total</th>
-                        <th className="px-4 py-3 text-right font-semibold text-slate-400 uppercase tracking-wider text-[10px]">Closed By</th>
+                        <th className="px-4 py-3 text-left font-semibold text-slate-400 uppercase tracking-wider text-[10px]">
+                          Month
+                        </th>
+                        <th className="px-4 py-3 text-right font-semibold text-amber-400 uppercase tracking-wider text-[10px]">
+                          Hand Cash
+                        </th>
+                        <th className="px-4 py-3 text-right font-semibold text-violet-400 uppercase tracking-wider text-[10px]">
+                          Online Cash
+                        </th>
+                        <th className="px-4 py-3 text-right font-semibold text-emerald-400 uppercase tracking-wider text-[10px]">
+                          Other Cash
+                        </th>
+                        <th className="px-4 py-3 text-right font-semibold text-white uppercase tracking-wider text-[10px]">
+                          Total
+                        </th>
+                        <th className="px-4 py-3 text-right font-semibold text-slate-400 uppercase tracking-wider text-[10px]">
+                          Closed By
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       {sortedClosings.map((c, idx) => (
-                        <tr key={c.id} className={idx % 2 === 0 ? 'bg-slate-900/30' : 'bg-slate-800/20'}>
+                        <tr
+                          key={c.id}
+                          className={idx % 2 === 0 ? 'bg-slate-900/30' : 'bg-slate-800/20'}
+                        >
                           <td className="px-4 py-3 font-semibold text-slate-200">
                             <div className="flex items-center gap-2">
                               {c.monthKey === currentMonthKey && (
@@ -1104,11 +1188,21 @@ export default function Dashboard({
                               {new Date(c.closedAt).toLocaleDateString()}
                             </div>
                           </td>
-                          <td className="px-4 py-3 text-right font-mono text-amber-300">৳{fmt(c.handCash)}</td>
-                          <td className="px-4 py-3 text-right font-mono text-violet-300">৳{fmt(c.onlineCash)}</td>
-                          <td className="px-4 py-3 text-right font-mono text-emerald-300">৳{fmt(c.otherCash)}</td>
-                          <td className="px-4 py-3 text-right font-mono text-white font-bold">৳{fmt(c.totalCash)}</td>
-                          <td className="px-4 py-3 text-right text-slate-400">{c.closedBy || '—'}</td>
+                          <td className="px-4 py-3 text-right font-mono text-amber-300">
+                            ৳{fmt(c.handCash)}
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono text-violet-300">
+                            ৳{fmt(c.onlineCash)}
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono text-emerald-300">
+                            ৳{fmt(c.otherCash)}
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono text-white font-bold">
+                            ৳{fmt(c.totalCash)}
+                          </td>
+                          <td className="px-4 py-3 text-right text-slate-400">
+                            {c.closedBy || '—'}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1128,12 +1222,18 @@ export default function Dashboard({
               >
                 <div className="flex items-center gap-2">
                   <CalendarClock className="w-4 h-4 text-indigo-400" />
-                  <span className="text-xs font-semibold text-slate-300">Opening Balance History</span>
-                  <span className="badge-pill badge-indigo text-[10px]">{openingBalances.length} record{openingBalances.length !== 1 ? 's' : ''}</span>
+                  <span className="text-xs font-semibold text-slate-300">
+                    Opening Balance History
+                  </span>
+                  <span className="badge-pill badge-indigo text-[10px]">
+                    {openingBalances.length} record{openingBalances.length !== 1 ? 's' : ''}
+                  </span>
                 </div>
-                {showOpeningHistory
-                  ? <ChevronUp className="w-4 h-4 text-slate-400" />
-                  : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                {showOpeningHistory ? (
+                  <ChevronUp className="w-4 h-4 text-slate-400" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-slate-400" />
+                )}
               </button>
 
               {showOpeningHistory && (
@@ -1141,20 +1241,37 @@ export default function Dashboard({
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="bg-slate-800/60">
-                        <th className="px-4 py-3 text-left font-semibold text-slate-400 uppercase tracking-wider text-[10px]">Month</th>
-                        <th className="px-4 py-3 text-right font-semibold text-amber-400 uppercase tracking-wider text-[10px]">Hand Cash</th>
-                        <th className="px-4 py-3 text-right font-semibold text-violet-400 uppercase tracking-wider text-[10px]">Online Cash</th>
-                        <th className="px-4 py-3 text-right font-semibold text-emerald-400 uppercase tracking-wider text-[10px]">Other Cash</th>
-                        <th className="px-4 py-3 text-right font-semibold text-white uppercase tracking-wider text-[10px]">Total</th>
-                        <th className="px-4 py-3 text-right font-semibold text-slate-400 uppercase tracking-wider text-[10px]">Source</th>
-                        <th className="px-4 py-3 text-right font-semibold text-slate-400 uppercase tracking-wider text-[10px]">Set By</th>
+                        <th className="px-4 py-3 text-left font-semibold text-slate-400 uppercase tracking-wider text-[10px]">
+                          Month
+                        </th>
+                        <th className="px-4 py-3 text-right font-semibold text-amber-400 uppercase tracking-wider text-[10px]">
+                          Hand Cash
+                        </th>
+                        <th className="px-4 py-3 text-right font-semibold text-violet-400 uppercase tracking-wider text-[10px]">
+                          Online Cash
+                        </th>
+                        <th className="px-4 py-3 text-right font-semibold text-emerald-400 uppercase tracking-wider text-[10px]">
+                          Other Cash
+                        </th>
+                        <th className="px-4 py-3 text-right font-semibold text-white uppercase tracking-wider text-[10px]">
+                          Total
+                        </th>
+                        <th className="px-4 py-3 text-right font-semibold text-slate-400 uppercase tracking-wider text-[10px]">
+                          Source
+                        </th>
+                        <th className="px-4 py-3 text-right font-semibold text-slate-400 uppercase tracking-wider text-[10px]">
+                          Set By
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       {[...openingBalances]
                         .sort((a, b) => b.monthKey.localeCompare(a.monthKey))
                         .map((o, idx) => (
-                          <tr key={o.id} className={idx % 2 === 0 ? 'bg-slate-900/30' : 'bg-slate-800/20'}>
+                          <tr
+                            key={o.id}
+                            className={idx % 2 === 0 ? 'bg-slate-900/30' : 'bg-slate-800/20'}
+                          >
                             <td className="px-4 py-3 font-semibold text-slate-200">
                               <div className="flex items-center gap-2">
                                 {o.monthKey === currentMonthKey && (
@@ -1166,18 +1283,32 @@ export default function Dashboard({
                                 {o.createdAt ? new Date(o.createdAt).toLocaleDateString() : ''}
                               </div>
                             </td>
-                            <td className="px-4 py-3 text-right font-mono text-amber-300">৳{fmt(o.handCash)}</td>
-                            <td className="px-4 py-3 text-right font-mono text-violet-300">৳{fmt(o.onlineCash)}</td>
-                            <td className="px-4 py-3 text-right font-mono text-emerald-300">৳{fmt(o.otherCash)}</td>
-                            <td className="px-4 py-3 text-right font-mono text-white font-bold">৳{fmt(o.totalCash)}</td>
+                            <td className="px-4 py-3 text-right font-mono text-amber-300">
+                              ৳{fmt(o.handCash)}
+                            </td>
+                            <td className="px-4 py-3 text-right font-mono text-violet-300">
+                              ৳{fmt(o.onlineCash)}
+                            </td>
+                            <td className="px-4 py-3 text-right font-mono text-emerald-300">
+                              ৳{fmt(o.otherCash)}
+                            </td>
+                            <td className="px-4 py-3 text-right font-mono text-white font-bold">
+                              ৳{fmt(o.totalCash)}
+                            </td>
                             <td className="px-4 py-3 text-right">
                               {o.source === 'carried_forward' ? (
-                                <span className="badge-pill badge-indigo text-[10px]">Carried Forward</span>
+                                <span className="badge-pill badge-indigo text-[10px]">
+                                  Carried Forward
+                                </span>
                               ) : (
-                                <span className="badge-pill badge-amber text-[10px]">Manual Entry</span>
+                                <span className="badge-pill badge-amber text-[10px]">
+                                  Manual Entry
+                                </span>
                               )}
                             </td>
-                            <td className="px-4 py-3 text-right text-slate-400">{o.createdBy || '—'}</td>
+                            <td className="px-4 py-3 text-right text-slate-400">
+                              {o.createdBy || '—'}
+                            </td>
                           </tr>
                         ))}
                     </tbody>
@@ -1193,7 +1324,9 @@ export default function Dashboard({
           <div
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
             style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}
-            onClick={e => { if (e.target === e.currentTarget) setShowCloseModal(false); }}
+            onClick={e => {
+              if (e.target === e.currentTarget) setShowCloseModal(false);
+            }}
           >
             <div className="glass-panel border border-amber-500/30 rounded-3xl p-6 w-full max-w-md shadow-2xl shadow-amber-950/30 animate-in fade-in zoom-in-95 duration-200">
               {/* Modal Header */}
@@ -1203,8 +1336,12 @@ export default function Dashboard({
                     <CalendarCheck className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-white">Close {currentMonthName} {currentYear}</h3>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Snapshot &amp; carry forward to next month</p>
+                    <h3 className="text-base font-bold text-white">
+                      Close {currentMonthName} {currentYear}
+                    </h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Snapshot &amp; carry forward to next month
+                    </p>
                   </div>
                 </div>
                 <button
@@ -1230,14 +1367,18 @@ export default function Dashboard({
                     <CreditCard className="w-4 h-4" />
                     Online Cash
                   </div>
-                  <span className="font-bold font-mono text-white">৳{fmt(paymentTotals.online)}</span>
+                  <span className="font-bold font-mono text-white">
+                    ৳{fmt(paymentTotals.online)}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-emerald-500/8 border border-emerald-500/20">
                   <div className="flex items-center gap-2 text-sm text-emerald-300">
                     <Coins className="w-4 h-4" />
                     Other Cash
                   </div>
-                  <span className="font-bold font-mono text-white">৳{fmt(paymentTotals.otherCash)}</span>
+                  <span className="font-bold font-mono text-white">
+                    ৳{fmt(paymentTotals.otherCash)}
+                  </span>
                 </div>
                 {/* Total divider */}
                 <div className="flex items-center justify-between px-4 py-4 rounded-xl bg-gradient-to-r from-indigo-600/20 via-indigo-500/10 to-violet-600/20 border border-indigo-500/30">
@@ -1245,14 +1386,20 @@ export default function Dashboard({
                     <Wallet className="w-4 h-4" />
                     Total Closing Cash
                   </div>
-                  <span className="text-xl font-extrabold font-mono text-white">৳{fmt(paymentTotals.totalCash)}</span>
+                  <span className="text-xl font-extrabold font-mono text-white">
+                    ৳{fmt(paymentTotals.totalCash)}
+                  </span>
                 </div>
               </div>
 
               {/* Info note */}
               <p className="text-[11px] text-slate-400 bg-slate-800/40 rounded-xl px-4 py-3 mb-5 leading-relaxed">
-                💡 This closing balance is snapshotted and will be available to <strong className="text-slate-200">carry forward as next month's opening cash</strong>.
-                &nbsp;This action cannot be undone and can only be done <strong className="text-slate-200">once per month</strong>.
+                💡 This closing balance is snapshotted and will be available to{' '}
+                <strong className="text-slate-200">
+                  carry forward as next month's opening cash
+                </strong>
+                . &nbsp;This action cannot be undone and can only be done{' '}
+                <strong className="text-slate-200">once per month</strong>.
               </p>
 
               {/* Action Buttons */}
@@ -1282,7 +1429,9 @@ export default function Dashboard({
           <div
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
             style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}
-            onClick={e => { if (e.target === e.currentTarget) setShowOpeningModal(false); }}
+            onClick={e => {
+              if (e.target === e.currentTarget) setShowOpeningModal(false);
+            }}
           >
             <div className="glass-panel border border-indigo-500/30 rounded-3xl p-6 w-full max-w-md shadow-2xl shadow-indigo-950/30 animate-in fade-in zoom-in-95 duration-200">
               {/* Modal Header */}
@@ -1292,8 +1441,12 @@ export default function Dashboard({
                     <CalendarClock className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-white">Opening Balance — {currentMonthName} {currentYear}</h3>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Starting cash for this month</p>
+                    <h3 className="text-base font-bold text-white">
+                      Opening Balance — {currentMonthName} {currentYear}
+                    </h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Starting cash for this month
+                    </p>
                   </div>
                 </div>
                 <button
@@ -1307,8 +1460,12 @@ export default function Dashboard({
 
               {/* Source badge */}
               <div className="mb-4 flex items-center gap-2">
-                <span className={`badge-pill text-[10px] ${obSource === 'carried_forward' ? 'badge-indigo' : 'badge-amber'}`}>
-                  {obSource === 'carried_forward' ? 'Carried Forward from Previous Month' : 'Manual Entry'}
+                <span
+                  className={`badge-pill text-[10px] ${obSource === 'carried_forward' ? 'badge-indigo' : 'badge-amber'}`}
+                >
+                  {obSource === 'carried_forward'
+                    ? 'Carried Forward from Previous Month'
+                    : 'Manual Entry'}
                 </span>
                 {obSource === 'carried_forward' && obFromMonthKey && (
                   <span className="text-[10px] text-slate-500">
@@ -1334,16 +1491,22 @@ export default function Dashboard({
 
               {obSource === 'carried_forward' && previousMonthClosing && (
                 <p className="text-[11px] text-indigo-200/80 bg-indigo-500/8 border border-indigo-500/20 rounded-xl px-4 py-3 mb-4 leading-relaxed">
-                  Values pre-filled from <strong>{previousMonthClosing.month} {previousMonthClosing.year}</strong> closing
-                  (Total ৳{fmt(previousMonthClosing.totalCash)}). Review the amounts below — you can edit them before saving.
-                  This creates a separate opening balance record and will not book any income or cash transaction.
+                  Values pre-filled from{' '}
+                  <strong>
+                    {previousMonthClosing.month} {previousMonthClosing.year}
+                  </strong>{' '}
+                  closing (Total ৳{fmt(previousMonthClosing.totalCash)}). Review the amounts below —
+                  you can edit them before saving. This creates a separate opening balance record
+                  and will not book any income or cash transaction.
                 </p>
               )}
 
               {/* Amount fields */}
               <div className="space-y-3 mb-4">
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">Hand Cash (৳)</label>
+                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+                    Hand Cash (৳)
+                  </label>
                   <div className="relative">
                     <PiggyBank className="w-4 h-4 text-amber-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
@@ -1358,7 +1521,9 @@ export default function Dashboard({
                   </div>
                 </div>
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">Online Cash (৳)</label>
+                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+                    Online Cash (৳)
+                  </label>
                   <div className="relative">
                     <CreditCard className="w-4 h-4 text-violet-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
@@ -1373,7 +1538,9 @@ export default function Dashboard({
                   </div>
                 </div>
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">Other Cash (৳)</label>
+                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+                    Other Cash (৳)
+                  </label>
                   <div className="relative">
                     <Coins className="w-4 h-4 text-emerald-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
@@ -1395,16 +1562,22 @@ export default function Dashboard({
                     Total Opening Cash
                   </div>
                   <span className="text-xl font-extrabold font-mono text-white">
-                    ৳{fmt((parseFloat(obHand) || 0) + (parseFloat(obOnline) || 0) + (parseFloat(obOther) || 0))}
+                    ৳
+                    {fmt(
+                      (parseFloat(obHand) || 0) +
+                        (parseFloat(obOnline) || 0) +
+                        (parseFloat(obOther) || 0)
+                    )}
                   </span>
                 </div>
               </div>
 
               <p className="text-[11px] text-slate-400 bg-slate-800/40 rounded-xl px-4 py-3 mb-5 leading-relaxed">
-                ⚠️ Hand + Online + Other stay synchronized and the total updates automatically.
-                Only <strong className="text-slate-200">one opening balance per month</strong> is stored, and it
-                <strong className="text-slate-200"> does not affect</strong> income, expenses, sales, payables, or
-                receivable calculations.
+                ⚠️ Hand + Online + Other stay synchronized and the total updates automatically. Only{' '}
+                <strong className="text-slate-200">one opening balance per month</strong> is stored,
+                and it
+                <strong className="text-slate-200"> does not affect</strong> income, expenses,
+                sales, payables, or receivable calculations.
               </p>
 
               {/* Action Buttons */}
@@ -1735,14 +1908,17 @@ export default function Dashboard({
         </div>
       </div>
 
-
-
-
       {/* ── Transfer Funds Modal ── */}
       {showTransferModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)' }}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)' }}
+        >
           <div className="bg-slate-950 border border-slate-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-5 relative">
-            <button onClick={() => setShowTransferModal(false)} className="absolute top-4 right-4 text-slate-500 hover:text-slate-200 transition-colors cursor-pointer">
+            <button
+              onClick={() => setShowTransferModal(false)}
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-200 transition-colors cursor-pointer"
+            >
               <X className="w-4 h-4" />
             </button>
 
@@ -1751,12 +1927,16 @@ export default function Dashboard({
                 <ArrowRightLeft className="w-4 h-4 text-violet-400" />
                 Transfer Funds
               </h2>
-              <p className="text-[11px] text-slate-500 mt-0.5">Move money between Hand Cash and Online Cash Balance</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Move money between Hand Cash and Online Cash Balance
+              </p>
             </div>
 
             <div className="space-y-3">
               <div>
-                <label className="text-[11px] font-semibold text-slate-400 block mb-1">Transfer Direction</label>
+                <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+                  Transfer Direction
+                </label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => setTransferType('cash_to_online')}
@@ -1782,7 +1962,9 @@ export default function Dashboard({
               </div>
 
               <div>
-                <label className="text-[11px] font-semibold text-slate-400 block mb-1">Amount (৳)</label>
+                <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+                  Amount (৳)
+                </label>
                 <input
                   type="number"
                   min="1"
@@ -1797,9 +1979,9 @@ export default function Dashboard({
                 <label className="text-[11px] font-semibold text-slate-400 block mb-1">Date</label>
                 <DatePicker
                   selected={transferDate ? new Date(transferDate) : null}
-                  onChange={(date) => {
+                  onChange={date => {
                     if (date) {
-                      setTransferDate(format(date, "yyyy-MM-dd"));
+                      setTransferDate(format(date, 'yyyy-MM-dd'));
                     }
                   }}
                   dateFormat="MMMM d, yyyy"
@@ -1809,7 +1991,9 @@ export default function Dashboard({
               </div>
 
               <div>
-                <label className="text-[11px] font-semibold text-slate-400 block mb-1">Note (optional)</label>
+                <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+                  Note (optional)
+                </label>
                 <input
                   type="text"
                   value={transferNote}

@@ -155,6 +155,22 @@ export default function ExpenseManager({
           field: 'fixed',
         });
       }
+
+      const da = parseFloat(r.discountAmount) || 0;
+      if (da > 0) {
+        list.push({
+          id: `${r.id}_discount`,
+          date: r.date,
+          createdAt: r.createdAt,
+          month: r.month,
+          merchantName: r.merchantName,
+          category: 'Sales Discount',
+          name: `Discount: ${r.merchantName || 'Sales Record'}`,
+          amount: da,
+          originalRecord: r,
+          field: 'discount',
+        });
+      }
     });
 
     return sortRecordsByDateDesc(list);
@@ -170,7 +186,7 @@ export default function ExpenseManager({
     });
   }, [itemizedExpenses, searchTerm, filterCategory]);
 
-  const maxBarVal = Math.max(stats.riders, stats.fixed, stats.variable, 100);
+  const maxBarVal = Math.max(stats.riders, stats.fixed, stats.variable, stats.discounts || 0, 100);
 
   const handleChange = e => {
     const { name, value } = e.target;
@@ -268,6 +284,12 @@ export default function ExpenseManager({
     } else if (item.field === 'fixed') {
       updated.fixedExpenseName = '';
       updated.fixedExpense = '0';
+    } else if (item.field === 'discount') {
+      const sales = parseFloat(record.salesAmount) || 0;
+      const delivery = parseFloat(record.deliveryCharge) || 0;
+      updated.discountPercent = '0';
+      updated.discountAmount = '0';
+      updated.paidByCustomer = (sales + delivery).toFixed(2);
     }
 
     await onUpdateRecord(updated);
@@ -383,7 +405,8 @@ export default function ExpenseManager({
                 { name: 'Rider Salary', value: stats.riders, color: 'bg-rose-500' },
                 { name: 'Fixed Costs', value: stats.fixed, color: 'bg-amber-500' },
                 { name: 'Other Expenses', value: stats.variable, color: 'bg-violet-500' },
-              ].map((cat, idx) => {
+                { name: 'Sales Discounts', value: stats.discounts || 0, color: 'bg-emerald-500' },
+              ].filter(cat => cat.value > 0).map((cat, idx) => {
                 const percent = (cat.value / maxBarVal) * 100;
                 return (
                   <div key={idx} className="space-y-1.5">
@@ -446,6 +469,7 @@ export default function ExpenseManager({
             <option value="Rider Wages">Rider Salary</option>
             <option value="Fixed Cost">Fixed Costs</option>
             <option value="Variable Overhead">Other Expenses</option>
+            <option value="Sales Discount">Sales Discounts</option>
           </select>
         </div>
       </div>
@@ -498,7 +522,9 @@ export default function ExpenseManager({
                             ? 'bg-rose-500/10 border-rose-500/20 text-rose-400'
                             : item.category === 'Fixed Cost'
                               ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
-                              : 'bg-violet-500/10 border-violet-500/20 text-violet-400'
+                              : item.category === 'Sales Discount'
+                                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                                : 'bg-violet-500/10 border-violet-500/20 text-violet-400'
                         }`}
                       >
                         {item.category === 'Rider Wages'
@@ -515,17 +541,21 @@ export default function ExpenseManager({
                     <td className="p-4 font-bold text-rose-400">৳{item.amount.toLocaleString()}</td>
                     <td className="p-4 text-center">
                       <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEdit(item.originalRecord)}
-                          className="p-1.5 rounded-lg border border-slate-800 text-slate-400 hover:text-white transition-all cursor-pointer"
-                        >
-                          <Edit2 className="w-3 h-3" />
-                        </button>
+                        {item.field !== 'discount' && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(item.originalRecord)}
+                            className="p-1.5 rounded-lg border border-slate-800 text-slate-400 hover:text-white transition-all cursor-pointer"
+                            title="Edit Expense"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => handleDeleteItem(item)}
                           className="p-1.5 rounded-lg border border-slate-800 text-slate-500 hover:text-rose-400 transition-all cursor-pointer"
+                          title="Delete Expense"
                         >
                           <Trash2 className="w-3 h-3" />
                         </button>

@@ -19,14 +19,16 @@ export function sumExpensesFromRecords(records) {
   let riders = 0;
   let variable = 0;
   let fixed = 0;
+  let discounts = 0;
 
   records.forEach(r => {
     riders += parseFloat(r.riderSalary) || 0;
     variable += parseFloat(r.otherExpense) || 0;
     fixed += parseFloat(r.fixedExpense) || 0;
+    discounts += parseFloat(r.discountAmount) || 0;
   });
 
-  return { riders, variable, fixed, total: riders + variable + fixed };
+  return { riders, variable, fixed, discounts, total: riders + variable + fixed + discounts };
 }
 
 export function sumMerchantPayouts(payments) {

@@ -78,8 +78,7 @@ export default function HistoryManager({ records, payments, transfers = [], onDe
       summaries[month].expenses +=
         (parseFloat(r.riderSalary) || 0) +
         (parseFloat(r.otherExpense) || 0) +
-        (parseFloat(r.fixedExpense) || 0) +
-        (parseFloat(r.discountAmount) || 0);
+        (parseFloat(r.fixedExpense) || 0);
     });
 
     // Compute derived metrics and store them back
@@ -116,7 +115,6 @@ export default function HistoryManager({ records, payments, transfers = [], onDe
     let riderSalary = 0;
     let otherExpense = 0;
     let fixedExpense = 0;
-    let discountAmount = 0;
 
     filteredRecords.forEach(r => {
       sales += parseFloat(r.salesAmount) || 0;
@@ -125,10 +123,9 @@ export default function HistoryManager({ records, payments, transfers = [], onDe
       riderSalary += parseFloat(r.riderSalary) || 0;
       otherExpense += parseFloat(r.otherExpense) || 0;
       fixedExpense += parseFloat(r.fixedExpense) || 0;
-      discountAmount += parseFloat(r.discountAmount) || 0;
     });
 
-    const expenses = riderSalary + otherExpense + fixedExpense + discountAmount;
+    const expenses = riderSalary + otherExpense + fixedExpense;
     const income = commission + delivery;
     const profit = income - expenses;
 

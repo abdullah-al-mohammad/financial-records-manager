@@ -19,22 +19,14 @@ export function sumExpensesFromRecords(records) {
   let riders = 0;
   let variable = 0;
   let fixed = 0;
-  let discounts = 0;
 
-  (records || []).forEach(r => {
+  records.forEach(r => {
     riders += parseFloat(r.riderSalary) || 0;
     variable += parseFloat(r.otherExpense) || 0;
     fixed += parseFloat(r.fixedExpense) || 0;
-    discounts += parseFloat(r.discountAmount) || 0;
   });
 
-  return {
-    riders,
-    variable,
-    fixed,
-    discounts,
-    total: riders + variable + fixed + discounts,
-  };
+  return { riders, variable, fixed, total: riders + variable + fixed };
 }
 
 export function sumMerchantPayouts(payments) {
@@ -120,7 +112,12 @@ export function computeNetCashBalance(records, payments, transfers = [], receiva
 
   receivables.forEach(rec => {
     const isReceived = rec.status === 'Received' || rec.paymentStatus === 'Received';
-    if (!isReceived) return;
+    if (!isReceived) {
+      // Not yet received — deduct from Hand Cash to reflect outstanding money owed to you
+      const pendingAmt = parseFloat(rec.amount) || 0;
+      if (pendingAmt > 0) cashExpenses += pendingAmt;
+      return;
+    }
 
     const amt = parseFloat(rec.amount) || 0;
     if (amt <= 0) return;
@@ -134,8 +131,10 @@ export function computeNetCashBalance(records, payments, transfers = [], receiva
       onlineCollected += amt;
       receivablesCollectedOnline += amt;
     } else {
-      cashCollected += amt;
-      receivablesCollectedCash += amt;
+      // cash account
+      // When status changes from Not Received to Received,
+      // the previous cashExpenses deduction disappears,
+      // which already increases cash by the receivable amount.
     }
   });
 

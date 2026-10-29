@@ -783,11 +783,6 @@ export default function SalesManager({
                         AUTO
                       </span>
                     </div>
-                    {parseFloat(form.discountAmount) > 0 && (
-                      <p className="text-[9px] text-amber-400 font-medium mt-1">
-                        Added to expenses
-                      </p>
-                    )}
                   </div>
 
                   <div className="group">
@@ -868,13 +863,6 @@ export default function SalesManager({
                 )}
 
                 {/* Live accounting effect badges */}
-                {parseFloat(form.discountAmount) > 0 && (
-                  <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                    Expense Impact: ৳{form.discountAmount} added to operational expenses
-                  </div>
-                )}
-
                 {form.digitalPaymentMethod &&
                   (() => {
                     const method = String(form.digitalPaymentMethod || '').toLowerCase();
@@ -932,11 +920,6 @@ export default function SalesManager({
                       Customer Grand Total
                     </p>
                     <p className="text-[9px] text-slate-600 mt-0.5">Sales + Delivery − Discount</p>
-                    {parseFloat(form.discountAmount) > 0 && (
-                      <p className="text-[9px] text-amber-400/90 font-medium mt-0.5">
-                        ৳{form.discountAmount} discount added to expenses
-                      </p>
-                    )}
                   </div>
                   <span className="relative text-xl font-black text-emerald-400 tabular-nums tracking-tight">
                     ৳{form.paidByCustomer}

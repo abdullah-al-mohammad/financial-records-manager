@@ -282,7 +282,6 @@ export default function Dashboard({
     let riderSalaries = 0;
     let otherExpenses = 0;
     let fixedExpenses = 0;
-    let discountExpenses = 0;
     let merchantBills = 0;
     let customerPaid = 0;
 
@@ -293,7 +292,6 @@ export default function Dashboard({
       riderSalaries += parseFloat(r.riderSalary) || 0;
       otherExpenses += parseFloat(r.otherExpense) || 0;
       fixedExpenses += parseFloat(r.fixedExpense) || 0;
-      discountExpenses += parseFloat(r.discountAmount) || 0;
       merchantBills += parseFloat(r.merchantBill) || 0;
       customerPaid += parseFloat(r.paidByCustomer) || 0;
     });
@@ -304,7 +302,7 @@ export default function Dashboard({
     });
 
     const income = commission + delivery;
-    const expenses = riderSalaries + otherExpenses + fixedExpenses + discountExpenses;
+    const expenses = riderSalaries + otherExpenses + fixedExpenses;
     const netProfit = income - expenses;
 
     // Merchant balances
@@ -343,7 +341,6 @@ export default function Dashboard({
       riderSalaries,
       otherExpenses,
       fixedExpenses,
-      discountExpenses,
       merchantBills,
       customerPaid,
       merchantTotals,
@@ -390,8 +387,7 @@ export default function Dashboard({
       monthsMap[r.month].expenses +=
         (parseFloat(r.riderSalary) || 0) +
         (parseFloat(r.otherExpense) || 0) +
-        (parseFloat(r.fixedExpense) || 0) +
-        (parseFloat(r.discountAmount) || 0);
+        (parseFloat(r.fixedExpense) || 0);
     });
 
     // Sort based on calendar order
@@ -493,11 +489,7 @@ export default function Dashboard({
 
   // Expense breakdown calculations for Donut chart SVG
   const expensePieData = useMemo(() => {
-    const total =
-      stats.riderSalaries +
-      stats.fixedExpenses +
-      stats.otherExpenses +
-      (stats.discountExpenses || 0);
+    const total = stats.riderSalaries + stats.fixedExpenses + stats.otherExpenses;
     if (total === 0) return [];
 
     return [
@@ -519,12 +511,6 @@ export default function Dashboard({
         color: '#a855f7',
         percentage: (stats.otherExpenses / total) * 100,
       },
-      {
-        name: 'Sales Discounts',
-        value: stats.discountExpenses || 0,
-        color: '#10b981',
-        percentage: ((stats.discountExpenses || 0) / total) * 100,
-      },
     ].filter(item => item.value > 0);
   }, [stats]);
 
@@ -536,15 +522,11 @@ export default function Dashboard({
     const cy = 80;
     const strokeWidth = 22;
     const circumference = 2 * Math.PI * radius;
-    const totalExpenses =
-      stats.riderSalaries +
-      stats.fixedExpenses +
-      stats.otherExpenses +
-      (stats.discountExpenses || 0);
 
     return expensePieData.map((item, index) => {
-      const angle = (item.value / totalExpenses) * 360;
-      const strokeDashArray = `${(item.value / totalExpenses) * circumference} ${circumference}`;
+      const angle =
+        (item.value / (stats.riderSalaries + stats.fixedExpenses + stats.otherExpenses)) * 360;
+      const strokeDashArray = `${(item.value / (stats.riderSalaries + stats.fixedExpenses + stats.otherExpenses)) * circumference} ${circumference}`;
       const strokeDashOffset = -(cumulativeAngle / 360) * circumference;
       cumulativeAngle += angle;
 
@@ -704,7 +686,7 @@ export default function Dashboard({
               accent: 'border-rose-500/25',
               text: 'text-rose-400',
               bg: 'bg-rose-500/10',
-              subtitle: 'Salaries, discounts, fixed & other expenses',
+              subtitle: 'Salaries, fixed & other expenses',
             },
             {
               title: 'Net Profit / Loss',
@@ -1597,7 +1579,12 @@ export default function Dashboard({
                     fontSize="11"
                     fontWeight="bold"
                   >
-                    ৳{stats.expenses.toLocaleString()}
+                    ৳
+                    {(
+                      stats.riderSalaries +
+                      stats.fixedExpenses +
+                      stats.otherExpenses
+                    ).toLocaleString()}
                   </text>
                 </svg>
 

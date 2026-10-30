@@ -646,8 +646,8 @@ export default function Dashboard({
             <span className="badge-pill badge-indigo">Live Summary</span>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="gird grid-cols-6 gap-2 items-center">
+            <table className="modern-table">
+              <thead>
                 <tr>
                   <th>Gross Sales</th>
                   <th>Commission</th>
@@ -658,7 +658,7 @@ export default function Dashboard({
                 </tr>
               </thead>
               <tbody>
-                <tr>
+                <tr className="text-center">
                   <td className="font-bold text-white text-sm">
                     ৳{Math.round(stats.sales).toLocaleString()}
                   </td>

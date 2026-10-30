@@ -646,8 +646,8 @@ export default function Dashboard({
             <span className="badge-pill badge-indigo">Live Summary</span>
           </div>
           <div className="overflow-x-auto">
-            <table className="modern-table">
-              <thead>
+            <table className="w-full">
+              <thead className="gird grid-cols-6 gap-2 items-center">
                 <tr>
                   <th>Gross Sales</th>
                   <th>Commission</th>

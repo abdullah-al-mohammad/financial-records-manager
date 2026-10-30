@@ -475,7 +475,7 @@ export default function SalesManager({
                           <span className="badge-pill badge-indigo">{r.digitalPaymentMethod}</span>
                         )}
                       </td>
-                      <td className="font-bold text-slate-100">
+                      <td className="font-bold">
                         {isRecTransfer ? '—' : `৳${Number(r.paidByCustomer || 0).toLocaleString()}`}
                       </td>
                       <td className="text-center">

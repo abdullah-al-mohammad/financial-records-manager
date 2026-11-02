@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import AdminPanel from './components/AdminPanel';
-import BillingManager from './components/BillingManager';
-import BillReminderManager from './components/BillReminderManager';
-import Dashboard from './components/Dashboard';
-import ExpenseManager from './components/ExpenseManager';
-import HistoryManager from './components/HistoryManager';
-import Login from './components/Login';
-import OtherCashManager from './components/OtherCashManager';
-import ReceivableManager from './components/ReceivableManager';
-import SalesManager from './components/SalesManager';
-import Sidebar from './components/Sidebar';
+import AdminPanel from './components/admin/AdminPanel';
+import BillingManager from './components/billing/BillingManager';
+import BillReminderManager from './components/reminders/BillReminderManager';
+import Dashboard from './components/dashboard/Dashboard';
+import ExpenseManager from './components/expense/ExpenseManager';
+import HistoryManager from './components/history/HistoryManager';
+import Login from './components/login/Login';
+import OtherCashManager from './components/otherCash/OtherCashManager';
+import ReceivableManager from './components/receivable/ReceivableManager';
+import SalesManager from './components/sales/SalesManager';
+import Sidebar from './components/sidebar/Sidebar';
 import { api, clearSession, getCurrentSession } from './utils/api';
 
 export default function App() {
@@ -313,6 +313,26 @@ export default function App() {
     );
   };
 
+  const handleImportRecords = async importedRecords => {
+    const list = Array.isArray(importedRecords) ? importedRecords : [];
+    if (list.length === 0) return false;
+
+    return await executeOperation(
+      'records_import',
+      () => api.importRecords(list),
+      `Imported ${list.length} sales record${list.length === 1 ? '' : 's'}!`,
+      'Import Failed',
+      () => {
+        setRecords(prev => {
+          const existing = prev || [];
+          const existingIds = new Set(existing.map(record => String(record.id)));
+          const added = list.filter(record => !existingIds.has(String(record.id)));
+          return [...added, ...existing];
+        });
+      }
+    );
+  };
+
   const handleAddMerchant = name => {
     const trimmed = name?.trim();
     if (!trimmed) return;
@@ -603,6 +623,7 @@ export default function App() {
               onDeleteRecord={handleDeleteRecord}
               onDeleteAllRecords={handleDeleteAllRecords}
               onAddMerchant={handleAddMerchant}
+              onImportRecords={handleImportRecords}
               editTarget={editTarget}
               clearEditTarget={clearEditTarget}
             />

@@ -19,6 +19,7 @@ A modern, high-performance financial management and bookkeeping web application 
 - **Transaction Logging**: Record date, merchant, sales amount, commission %, discounts, delivery charges, customer payment, and payment method (Cash / Online).
 - **Auto-Calculations**: Automatic computation of merchant bills, commission deductions, and net customer payments.
 - **Advanced Filtering**: Filter records by month, sales type, merchant name, or rider.
+- **CSV Import & Export**: Download the current (filtered) sales list as a spreadsheet, or bulk-import a CSV with row validation and duplicate detection.
 
 ### 💰 3. Receivables & Payables Ledger
 - **Receivables (Money to Receive)**:
@@ -141,6 +142,7 @@ financial-record/
 - **Form Inputs**: Enter transaction date & time, cycle month, merchant name, sales amount, commission %, discounts, and delivery charges.
 - **Payment Method**: Specify whether the customer paid in **Cash** or via digital methods (**bKash**, **Nagad**, **Bank**, etc.).
 - **Search & Filters**: Toggle **"Filters"** to isolate transactions by month, transaction type, or keywords (rider or merchant).
+- **Import / Export CSV**: Click **"Import"** to upload a spreadsheet (download the template first) or **"Export CSV"** to save the currently filtered rows. Re-importing the same file skips duplicates automatically.
 
 ### 3. 📥 Receivables (Money You Will Receive)
 - **Add Record**: Navigate to the **"Receivables & Payables"** page, select the **"Receivables"** subtab, and click **"+ Add Receivable"**.

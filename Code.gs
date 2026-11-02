@@ -547,6 +547,83 @@ function createMonthClosingEntry(entry, user) {
   return { success: true, id: entryObj.id };
 }
 
+// Bulk sales import used by the CSV importer. Appends every valid new row in a
+// single setValues() call and skips IDs that already exist, so re-importing the
+// same CSV is idempotent.
+function importSalesRecordsBulk(records, user) {
+  if (!Array.isArray(records) || records.length === 0) {
+    throw new Error('No records supplied for import.');
+  }
+  if (records.length > 2000) {
+    throw new Error('Too many records in one import (maximum 2000).');
+  }
+
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+    const sheet = getSheet();
+    const data = sheet.getDataRange().getValues();
+    const existingIds = new Set();
+
+    for (let i = 1; i < data.length; i++) {
+      const id = String(data[i][0] || '').trim();
+      if (id) existingIds.add(id);
+    }
+
+    const rows = [];
+    let skipped = 0;
+
+    records.forEach(raw => {
+      if (!raw || typeof raw !== 'object') {
+        skipped++;
+        return;
+      }
+
+      const merchantName = String(raw.merchantName || '').trim();
+      const salesAmount = parseFloat(raw.salesAmount) || 0;
+      const id =
+        String(raw.id || '').trim() ||
+        'rec_' + new Date().getTime().toString() + '_' + Math.floor(Math.random() * 1000);
+
+      if (!merchantName || salesAmount <= 0 || existingIds.has(id)) {
+        skipped++;
+        return;
+      }
+
+      existingIds.add(id);
+      rows.push(
+        objectToRow(
+          {
+            ...raw,
+            id,
+            merchantName,
+            salesAmount: String(raw.salesAmount),
+            createdAt: raw.createdAt || new Date().toISOString(),
+          },
+          RECORD_HEADERS
+        )
+      );
+    });
+
+    if (rows.length > 0) {
+      sheet
+        .getRange(sheet.getLastRow() + 1, 1, rows.length, RECORD_HEADERS.length)
+        .setValues(rows);
+      SpreadsheetApp.flush();
+    }
+
+    logAudit(
+      user,
+      'Import Sales Records',
+      `Imported ${rows.length} record(s); skipped ${skipped}.`
+    );
+
+    return { success: true, imported: rows.length, skipped };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 // Handle GET request (JSONP / Fetch)
 function doGet(e) {
   const action = e.parameter.action;
@@ -643,6 +720,11 @@ function doGet(e) {
       } finally {
         lock.releaseLock();
       }
+    }
+
+    if (action === 'createRecordsBulk') {
+      const recordsToImport = parseJsonParam(e.parameter.records);
+      return jsonResponse(importSalesRecordsBulk(recordsToImport, user), callback);
     }
 
     if (action === 'update') {
@@ -1172,6 +1254,7 @@ function doPost(e) {
       password,
       sessionToken,
       record,
+      records,
       payment,
       transfer,
       receivable,
@@ -1257,6 +1340,10 @@ function doPost(e) {
       } finally {
         lock.releaseLock();
       }
+    }
+
+    if (action === 'createRecordsBulk') {
+      return jsonResponse(importSalesRecordsBulk(records, user));
     }
 
     if (action === 'update') {

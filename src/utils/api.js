@@ -721,6 +721,89 @@ export const api = {
     });
   },
 
+  async importRecords(recordsToImport) {
+    const list = (Array.isArray(recordsToImport) ? recordsToImport : [])
+      .filter(record => record && typeof record === 'object')
+      .map(record => ({
+        ...record,
+        id:
+          record.id !== undefined && String(record.id).trim() !== ''
+            ? String(record.id).trim()
+            : generateUniqueId('rec'),
+        createdAt: record.createdAt || new Date().toISOString(),
+      }));
+
+    if (list.length === 0) {
+      return { success: true, imported: 0, skipped: 0 };
+    }
+
+    return deduplicateMutation('import_records', async () => {
+      invalidateApiCache('dashboardData');
+      invalidateApiCache('records');
+
+      if (isLiveMode()) {
+        try {
+          // Bulk POST keeps large imports out of the query string.
+          const resp = await makePostRequest('createRecordsBulk', { records: list });
+          return {
+            success: true,
+            imported: Number(resp.imported) || 0,
+            skipped: Number(resp.skipped) || 0,
+          };
+        } catch (bulkError) {
+          // Older Apps Script deployments don't have the bulk action yet.
+          console.warn(
+            '[Import] Bulk import unavailable, falling back to individual saves:',
+            bulkError.message
+          );
+
+          let imported = 0;
+          let skipped = 0;
+          for (const record of list) {
+            try {
+              const resp = await makeJsonpRequest('create', { record });
+              if (resp && resp.duplicatePrevented) skipped += 1;
+              else imported += 1;
+            } catch (err) {
+              const message = String(err?.message || '');
+              if (/unauthorized|session invalid|expired/i.test(message)) throw err;
+              skipped += 1;
+            }
+          }
+          return { success: true, imported, skipped, fallback: true };
+        }
+      }
+
+      await new Promise(r => setTimeout(r, 150));
+      const existing = mockDb.get('records', []);
+      const existingIds = new Set(existing.map(record => String(record.id)));
+      const added = [];
+      let skipped = 0;
+
+      list.forEach(record => {
+        if (existingIds.has(String(record.id))) {
+          skipped += 1;
+          return;
+        }
+        existingIds.add(String(record.id));
+        added.push(record);
+      });
+
+      if (added.length > 0) {
+        mockDb.set('records', [...existing, ...added]);
+      }
+
+      const session = getCurrentSession();
+      mockDb.logAudit(
+        session?.username || 'admin',
+        'Import Sales Records',
+        `Imported ${added.length} record(s); skipped ${skipped}.`
+      );
+
+      return { success: true, imported: added.length, skipped };
+    });
+  },
+
   async updateRecord(record) {
     if (!record || !record.id) throw new Error('Record ID is required for update');
     const targetId = String(record.id).trim();

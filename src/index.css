@@ -427,47 +427,111 @@ input[type=number] {
   -moz-appearance: textfield;
 }
 
-/* Print styling */
+/* ─────────────────────────────────────────────────────────
+   A4 page size & margins (applies globally when printing)
+───────────────────────────────────────────────────────── */
+@page {
+  size: A4 portrait;
+  margin: 14mm 12mm;
+}
+
+/* ─────────────────────────────────────────────────────────
+   Print styling
+───────────────────────────────────────────────────────── */
 @media print {
   body {
     background: white !important;
     color: black !important;
   }
+
   .no-print {
     display: none !important;
   }
-  .glass-panel, .glass-panel-glow {
+
+  .glass-panel,
+  .glass-panel-glow {
     background: transparent !important;
     border: 1px solid #ccc !important;
     color: black !important;
     box-shadow: none !important;
   }
 
+  /* ── print-report-only mode ──────────────────────────────
+     The .printable-report-area is a React portal mounted
+     DIRECTLY on <body>. We hide all other siblings on <body>
+     with display:none so they take zero layout space.
+  ─────────────────────────────────────────────────────── */
+  body.print-report-only > *:not(.printable-report-area) {
+    display: none !important;
+  }
+
   body.print-report-only {
     background: white !important;
     color: black !important;
-  }
-
-  body.print-report-only * {
-    visibility: hidden !important;
-  }
-
-  body.print-report-only .printable-report-area,
-  body.print-report-only .printable-report-area * {
-    visibility: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   body.print-report-only .printable-report-area {
     display: block !important;
-    position: fixed !important;
-    left: 0 !important;
-    top: 0 !important;
-    background: white !important;
-    color: black !important;
     width: 100% !important;
     max-width: 100% !important;
-    padding: 1.5rem !important;
     margin: 0 !important;
-    z-index: 99999 !important;
+    padding: 0 !important;
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Each logical page occupies the exact printable A4 height */
+  .print-page {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    height: 269mm !important; /* 297mm - 28mm vertical margins */
+    max-height: 269mm !important;
+    box-sizing: border-box !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    background: white !important;
+    color: black !important;
+    overflow: hidden !important;
+  }
+
+  /* Page break after each page except the last page */
+  .print-page:not(:last-child) {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+
+  .print-page:last-child {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  .print-page-body {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .print-page-footer {
+    flex-shrink: 0;
+    margin-top: auto;
+  }
+
+  /* Prevent individual table rows from tearing in half */
+  .print-page tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Force background colors and borders to print accurately */
+  .print-page thead tr,
+  .print-page tfoot tr,
+  .print-page .bg-black,
+  .print-page .bg-slate-50,
+  .print-page .bg-slate-100 {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 }

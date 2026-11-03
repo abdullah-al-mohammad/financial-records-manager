@@ -33,6 +33,8 @@ export default function BillingManager({
     activeReportMerchant,
     merchantBillReportData,
     handlePrintReport,
+    handleDownloadPdf,
+    isDownloadingPdf,
     openMerchantStatement,
   } = useBillReport({ records, payments });
 
@@ -83,6 +85,8 @@ export default function BillingManager({
         activeReportMerchant={activeReportMerchant}
         merchantBillReportData={merchantBillReportData}
         onPrint={handlePrintReport}
+        onDownloadPdf={handleDownloadPdf}
+        isDownloadingPdf={isDownloadingPdf}
       />
 
       {/* Grid: Payment Entry Form & Dues Overview Card */}
@@ -131,6 +135,8 @@ export default function BillingManager({
         billReportEndDate={billReportEndDate}
         setBillReportEndDate={setBillReportEndDate}
         onPrint={handlePrintReport}
+        onDownloadPdf={handleDownloadPdf}
+        isDownloadingPdf={isDownloadingPdf}
       />
 
       <PrintableBillReport
